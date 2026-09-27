@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Job Application Tracker</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        width: 280px;
+        padding: 12px;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        margin-bottom: 4px;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px;
+        margin-bottom: 8px;
+      }
+      button {
+        width: 100%;
+        padding: 6px;
+      }
+      #status {
+        font-size: 12px;
+        margin-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <h3>Claude API Key</h3>
+    <label for="apiKey">Your key (stored locally only)</label>
+    <input id="apiKey" type="password" placeholder="sk-ant-..." />
+    <button id="save">Save</button>
+    <div id="status"></div>
+    <hr />
+    <button id="openDashboard">Open Dashboard</button>
+    <script src="./popup.js"></script>
+  </body>
+</html>

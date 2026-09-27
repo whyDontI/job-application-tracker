@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Job Application Tracker",
+  "version": "0.1.0",
+  "description": "Track job applications straight from Gmail: one click on an email, AI-extracted and organized on a local dashboard.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://mail.google.com/*", "https://api.anthropic.com/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
