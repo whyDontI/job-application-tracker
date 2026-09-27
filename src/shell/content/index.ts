@@ -1,5 +1,7 @@
+import { appendTimelineEvent, findApplicationByThreadId } from "../../core/applicationMatching.js";
 import { confirmTracking } from "../../core/confirmTracking.js";
 import { resolveCompany } from "../../core/companyResolution.js";
+import type { TimelineEvent } from "../../core/types.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
 import type { ExtractThreadResponse, ExtractThreadRequest } from "../messages.js";
 import { showConfirmPanel } from "./confirmPanel.js";
@@ -12,8 +14,20 @@ import {
   getGmailAccountIndex,
   scrapeOpenThread,
 } from "./gmailDom.js";
+import { showToast } from "./toast.js";
 
 const repository = createChromeRepository();
+
+function buildInboundEvent(threadId: string, accountIndex: string, summary: string): TimelineEvent {
+  return {
+    id: crypto.randomUUID(),
+    threadId,
+    direction: "inbound",
+    timestamp: new Date().toISOString(),
+    summary,
+    deepLink: buildThreadDeepLink(accountIndex, threadId),
+  };
+}
 
 async function handleTrackClick(): Promise<void> {
   const scraped = scrapeOpenThread();
@@ -32,9 +46,23 @@ async function handleTrackClick(): Promise<void> {
     return;
   }
 
+  const accountIndex = getGmailAccountIndex();
+  const applications = await repository.getApplications();
+  const existingApplication = findApplicationByThreadId(applications, threadId);
+
+  if (existingApplication) {
+    const newEvent = buildInboundEvent(threadId, accountIndex, response.result.summary);
+    try {
+      await repository.saveApplication(appendTimelineEvent(existingApplication, newEvent));
+      showToast("Job Tracker: added to the existing application's timeline.");
+    } catch (error) {
+      window.alert(`Job Tracker: failed to save (${error instanceof Error ? error.message : error}).`);
+    }
+    return;
+  }
+
   const companies = await repository.getCompanies();
   const { matchedCompanyId, suggestedName } = resolveCompany(companies, response.result.companyGuess);
-  const accountIndex = getGmailAccountIndex();
 
   showConfirmPanel({
     extraction: response.result,
@@ -51,20 +79,17 @@ async function handleTrackClick(): Promise<void> {
         companyChoice: choice,
         newCompanyId: crypto.randomUUID(),
         companyGuessDomain: response.result.companyGuess?.domain,
-        event: {
-          id: crypto.randomUUID(),
-          threadId,
-          direction: "inbound",
-          timestamp: new Date().toISOString(),
-          summary: response.result.summary,
-          deepLink: buildThreadDeepLink(accountIndex, threadId),
-        },
+        event: buildInboundEvent(threadId, accountIndex, response.result.summary),
       });
 
-      if (newCompany) {
-        await repository.saveCompany(newCompany);
+      try {
+        if (newCompany) {
+          await repository.saveCompany(newCompany);
+        }
+        await repository.saveApplication(application);
+      } catch (error) {
+        window.alert(`Job Tracker: failed to save (${error instanceof Error ? error.message : error}).`);
       }
-      await repository.saveApplication(application);
     },
   });
 }
