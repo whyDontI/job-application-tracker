@@ -8,12 +8,15 @@ import { createChromeRepository } from "../storage/chromeRepository.js";
 import type { ExtractThreadResponse, ExtractThreadRequest } from "../messages.js";
 import { showConfirmPanel } from "./confirmPanel.js";
 import { makeDraggableEdgeButton } from "./draggableEdgeButton.js";
+import type { DraggableEdgeButtonOptions } from "./draggableEdgeButton.js";
 import {
+  FOLLOWUP_BUTTON_ID,
   TRACK_BUTTON_ID,
   buildThreadDeepLink,
   extractThreadIdFromUrl,
   getCurrentGmailAccount,
   getGmailAccountIndex,
+  isSentThreadOpen,
   isThreadOpen,
   scrapeOpenThread,
 } from "./gmailDom.js";
@@ -21,11 +24,16 @@ import { showToast } from "./toast.js";
 
 const repository = createChromeRepository();
 
-function buildInboundEvent(threadId: string, accountIndex: string, summary: string): TimelineEvent {
+function buildTimelineEvent(
+  threadId: string,
+  accountIndex: string,
+  direction: TimelineEvent["direction"],
+  summary: string
+): TimelineEvent {
   return {
     id: crypto.randomUUID(),
     threadId,
-    direction: "inbound",
+    direction,
     timestamp: new Date().toISOString(),
     summary,
     deepLink: buildThreadDeepLink(accountIndex, threadId),
@@ -38,13 +46,29 @@ function reportError(context: string, error: unknown): void {
   window.alert(`Job Tracker: ${context} (${message})`);
 }
 
-async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
+async function withBusyLabel(
+  button: HTMLButtonElement,
+  busyText: string,
+  errorContext: string,
+  action: () => Promise<void>
+): Promise<void> {
   const label = button.querySelector<HTMLElement>(".job-tracker-label") ?? button;
   const originalLabel = label.textContent;
   button.disabled = true;
-  label.textContent = "Tracking…";
+  label.textContent = busyText;
 
   try {
+    await action();
+  } catch (error) {
+    reportError(errorContext, error);
+  } finally {
+    button.disabled = false;
+    label.textContent = originalLabel;
+  }
+}
+
+async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
+  await withBusyLabel(button, "Tracking…", "couldn't track this email", async () => {
     const scraped = scrapeOpenThread();
     const threadId = extractThreadIdFromUrl();
 
@@ -72,7 +96,7 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
     const existingApplication = findApplicationByThreadId(applications, threadId);
 
     if (existingApplication) {
-      const newEvent = buildInboundEvent(threadId, accountIndex, response.result.summary);
+      const newEvent = buildTimelineEvent(threadId, accountIndex, "inbound", response.result.summary);
       const updated = appendTimelineEvent(existingApplication, newEvent, {
         stageSignal: response.result.stageSignal,
         joiningLink: response.result.joiningLink,
@@ -104,7 +128,7 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
           companyChoice: choice,
           newCompanyId: crypto.randomUUID(),
           companyGuessDomain: response.result.companyGuess?.domain,
-          event: buildInboundEvent(threadId, accountIndex, response.result.summary),
+          event: buildTimelineEvent(threadId, accountIndex, "inbound", response.result.summary),
           stage: choice.stage,
           joiningLink: choice.joiningLink,
         });
@@ -120,12 +144,33 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
         }
       },
     });
-  } catch (error) {
-    reportError("couldn't track this email", error);
-  } finally {
-    button.disabled = false;
-    label.textContent = originalLabel;
-  }
+  });
+}
+
+async function handleFollowUpClick(button: HTMLButtonElement): Promise<void> {
+  await withBusyLabel(button, "Logging…", "couldn't log this follow-up", async () => {
+    const threadId = extractThreadIdFromUrl();
+    if (!threadId) {
+      window.alert("Job Tracker: couldn't find an open email thread to log a follow-up for.");
+      return;
+    }
+
+    const accountIndex = getGmailAccountIndex();
+    const applications = await repository.getApplications();
+    const existingApplication = findApplicationByThreadId(applications, threadId);
+
+    if (!existingApplication) {
+      window.alert(
+        "Job Tracker: no tracked application matches this thread yet — track the original email first."
+      );
+      return;
+    }
+
+    const outboundEvent = buildTimelineEvent(threadId, accountIndex, "outbound", "Follow-up sent");
+    const updated = appendTimelineEvent(existingApplication, outboundEvent);
+    await repository.saveApplication(updated);
+    showToast("Job Tracker: follow-up logged.");
+  });
 }
 
 const DRAG_HANDLE_STYLE_ID = "job-tracker-drag-handle-style";
@@ -134,10 +179,13 @@ function ensureDragHandleStyleInjected(): void {
   if (document.getElementById(DRAG_HANDLE_STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = DRAG_HANDLE_STYLE_ID;
-  style.textContent = `
-    #${TRACK_BUTTON_ID} .job-tracker-drag-handle { opacity: 0; transition: opacity 0.15s ease; }
-    #${TRACK_BUTTON_ID}:hover .job-tracker-drag-handle { opacity: 1; }
-  `;
+  style.textContent = [TRACK_BUTTON_ID, FOLLOWUP_BUTTON_ID]
+    .map(
+      (id) =>
+        `#${id} .job-tracker-drag-handle { opacity: 0; transition: opacity 0.15s ease; }
+         #${id}:hover .job-tracker-drag-handle { opacity: 1; }`
+    )
+    .join("\n");
   document.head.appendChild(style);
 }
 
@@ -154,11 +202,16 @@ function createDragHandle(): HTMLSpanElement {
   return handle;
 }
 
-function createFloatingButton(): HTMLButtonElement {
+function createFloatingButton(
+  id: string,
+  labelText: string,
+  onClick: (button: HTMLButtonElement) => void,
+  dragOptions: DraggableEdgeButtonOptions
+): HTMLButtonElement {
   ensureDragHandleStyleInjected();
 
   const button = document.createElement("button");
-  button.id = TRACK_BUTTON_ID;
+  button.id = id;
   button.type = "button";
   // Docked to the right edge, outside Gmail's own DOM tree — see the note in
   // gmailDom.ts on why we don't inject into Gmail's toolbar. Vertically
@@ -187,24 +240,37 @@ function createFloatingButton(): HTMLButtonElement {
 
   const label = document.createElement("span");
   label.className = "job-tracker-label";
-  label.textContent = "Track";
+  label.textContent = labelText;
 
   button.append(createDragHandle(), label);
-  makeDraggableEdgeButton(button, () => void handleTrackClick(button));
+  makeDraggableEdgeButton(button, () => onClick(button), dragOptions);
   return button;
 }
 
-function getOrCreateFloatingButton(): HTMLButtonElement {
-  const existing = document.getElementById(TRACK_BUTTON_ID) as HTMLButtonElement | null;
+function getOrCreateButton(
+  id: string,
+  labelText: string,
+  onClick: (button: HTMLButtonElement) => void,
+  dragOptions: DraggableEdgeButtonOptions
+): HTMLButtonElement {
+  const existing = document.getElementById(id) as HTMLButtonElement | null;
   if (existing) return existing;
-  const button = createFloatingButton();
+  const button = createFloatingButton(id, labelText, onClick, dragOptions);
   document.body.appendChild(button);
   return button;
 }
 
 function syncButtonVisibility(): void {
-  const button = getOrCreateFloatingButton();
-  button.style.display = isThreadOpen() ? "block" : "none";
+  const trackButton = getOrCreateButton(TRACK_BUTTON_ID, "Track", (button) => void handleTrackClick(button), {});
+  trackButton.style.display = isThreadOpen() ? "block" : "none";
+
+  const followUpButton = getOrCreateButton(
+    FOLLOWUP_BUTTON_ID,
+    "Log Follow-up",
+    (button) => void handleFollowUpClick(button),
+    { storageKey: "jobTrackerFollowUpButtonTop", defaultTopRatio: 0.55 }
+  );
+  followUpButton.style.display = isSentThreadOpen() ? "block" : "none";
 }
 
 window.addEventListener("hashchange", syncButtonVisibility);

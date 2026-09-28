@@ -12,6 +12,7 @@
 export const SUBJECT_SELECTOR = "h2.hP";
 export const MESSAGE_BODY_SELECTOR = ".a3s";
 export const TRACK_BUTTON_ID = "job-tracker-track-button";
+export const FOLLOWUP_BUTTON_ID = "job-tracker-followup-button";
 
 export function extractThreadIdFromUrl(): string | null {
   const hash = window.location.hash;
@@ -21,6 +22,17 @@ export function extractThreadIdFromUrl(): string | null {
 
 export function isThreadOpen(): boolean {
   return extractThreadIdFromUrl() !== null && document.querySelector(SUBJECT_SELECTOR) !== null;
+}
+
+/**
+ * Gmail routes each label to its own hash prefix (#inbox/…, #sent/…, #all/…).
+ * The Sent label is the one place a message the user wrote is guaranteed to
+ * be the thing they're looking at, so it's the signal for offering the
+ * follow-up button rather than trying to tell inbound/outbound messages
+ * apart within a mixed conversation thread.
+ */
+export function isSentThreadOpen(): boolean {
+  return isThreadOpen() && window.location.hash.startsWith("#sent/");
 }
 
 export function scrapeOpenThread(): { subject: string; threadText: string } | null {
