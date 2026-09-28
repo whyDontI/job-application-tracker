@@ -6,11 +6,15 @@ describe("parseExtractionResponse", () => {
     const raw = JSON.stringify({
       companyGuess: { name: "Acme Corp", domain: "acme.com" },
       summary: "Applied for Backend Engineer role, confirmation received.",
+      stageGuess: null,
+      joiningLink: null,
     });
 
     expect(parseExtractionResponse(raw)).toEqual({
       companyGuess: { name: "Acme Corp", domain: "acme.com" },
       summary: "Applied for Backend Engineer role, confirmation received.",
+      stageSignal: null,
+      joiningLink: null,
     });
   });
 
@@ -21,6 +25,65 @@ describe("parseExtractionResponse", () => {
     });
 
     expect(parseExtractionResponse(raw).companyGuess).toBeNull();
+  });
+
+  it("parses a stage guess with an explicit round", () => {
+    const raw = JSON.stringify({
+      companyGuess: null,
+      summary: "Scheduled for a second interview.",
+      stageGuess: { name: "interview", round: 2 },
+    });
+
+    expect(parseExtractionResponse(raw).stageSignal).toEqual({ name: "interview", round: 2 });
+  });
+
+  it("parses a stage guess with no round", () => {
+    const raw = JSON.stringify({
+      companyGuess: null,
+      summary: "Application received.",
+      stageGuess: { name: "applied" },
+    });
+
+    expect(parseExtractionResponse(raw).stageSignal).toEqual({ name: "applied" });
+  });
+
+  it("defaults stageSignal to null when stageGuess is omitted", () => {
+    const raw = JSON.stringify({ companyGuess: null, summary: "x" });
+    expect(parseExtractionResponse(raw).stageSignal).toBeNull();
+  });
+
+  it("parses a joining link when present", () => {
+    const raw = JSON.stringify({
+      companyGuess: null,
+      summary: "Offer accepted, here's your Zoom link.",
+      joiningLink: "https://zoom.us/j/123",
+    });
+
+    expect(parseExtractionResponse(raw).joiningLink).toBe("https://zoom.us/j/123");
+  });
+
+  it("defaults joiningLink to null when omitted", () => {
+    const raw = JSON.stringify({ companyGuess: null, summary: "x" });
+    expect(parseExtractionResponse(raw).joiningLink).toBeNull();
+  });
+
+  it("throws ExtractionParseError when stageGuess.name is not a known stage", () => {
+    const raw = JSON.stringify({ companyGuess: null, summary: "x", stageGuess: { name: "bogus" } });
+    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
+  });
+
+  it("throws ExtractionParseError when stageGuess.round is not a positive integer", () => {
+    const raw = JSON.stringify({
+      companyGuess: null,
+      summary: "x",
+      stageGuess: { name: "interview", round: -1 },
+    });
+    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
+  });
+
+  it("throws ExtractionParseError when joiningLink is not a string", () => {
+    const raw = JSON.stringify({ companyGuess: null, summary: "x", joiningLink: 42 });
+    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
   });
 
   it("tolerates surrounding prose/markdown fences around the JSON object", () => {

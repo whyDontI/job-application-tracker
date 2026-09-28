@@ -1,4 +1,5 @@
 import { createApplication } from "./applications.js";
+import type { Stage } from "./stage.js";
 import type { Application, Company, TimelineEvent } from "./types.js";
 
 export interface CompanyChoice {
@@ -16,6 +17,9 @@ export interface ConfirmTrackingInput {
   newCompanyId: string;
   companyGuessDomain?: string;
   event: TimelineEvent;
+  /** Already confirmed/overridden by the user in the confirm panel — not a raw AI signal. */
+  stage: Stage;
+  joiningLink: string | null;
 }
 
 export interface ConfirmTrackingResult {
@@ -49,6 +53,8 @@ export function confirmTracking(input: ConfirmTrackingInput): ConfirmTrackingRes
     sessionId: input.sessionId,
     createdAt: input.createdAt,
     firstEvent: input.event,
+    stage: input.stage,
+    joiningLink: input.joiningLink,
   });
 
   return { application, newCompany };

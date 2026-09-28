@@ -1,3 +1,5 @@
+import { applyStageSignal } from "./stage.js";
+import type { StageSignal } from "./stage.js";
 import type { Application, TimelineEvent } from "./types.js";
 
 /**
@@ -14,9 +16,22 @@ export function findApplicationByThreadId(
   );
 }
 
-export function appendTimelineEvent(application: Application, event: TimelineEvent): Application {
+export interface AppendTimelineEventUpdates {
+  /** Applied to the application's current stage via applyStageSignal; a null/omitted signal leaves the stage untouched. */
+  stageSignal?: StageSignal | null;
+  /** Overwrites the stored joining link when present; a null/omitted value keeps whatever was already stored. */
+  joiningLink?: string | null;
+}
+
+export function appendTimelineEvent(
+  application: Application,
+  event: TimelineEvent,
+  updates: AppendTimelineEventUpdates = {}
+): Application {
   return {
     ...application,
     timelineEvents: [...application.timelineEvents, event],
+    stage: applyStageSignal(application.stage, updates.stageSignal ?? null),
+    joiningLink: updates.joiningLink ?? application.joiningLink,
   };
 }

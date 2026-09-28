@@ -18,6 +18,8 @@ const application: Application = {
   sessionId: null,
   createdAt: "2026-09-28T00:00:00.000Z",
   timelineEvents: [existingEvent],
+  stage: { name: "applied" },
+  joiningLink: null,
 };
 
 describe("findApplicationByThreadId", () => {
@@ -50,5 +52,32 @@ describe("appendTimelineEvent", () => {
     expect(updated.timelineEvents).toEqual([existingEvent, newEvent]);
     expect(application.timelineEvents).toEqual([existingEvent]);
     expect(updated).not.toBe(application);
+  });
+
+  it("leaves stage and joiningLink untouched when no updates are given", () => {
+    const withLink: Application = { ...application, joiningLink: "https://zoom.us/j/123" };
+    const updated = appendTimelineEvent(withLink, existingEvent);
+    expect(updated.stage).toEqual({ name: "applied" });
+    expect(updated.joiningLink).toBe("https://zoom.us/j/123");
+  });
+
+  it("applies a stage signal via the same state machine as applyStageSignal", () => {
+    const updated = appendTimelineEvent(application, existingEvent, {
+      stageSignal: { name: "interview" },
+    });
+    expect(updated.stage).toEqual({ name: "interview", round: 1 });
+  });
+
+  it("overwrites the joining link when a new one is provided", () => {
+    const updated = appendTimelineEvent(application, existingEvent, {
+      joiningLink: "https://zoom.us/j/456",
+    });
+    expect(updated.joiningLink).toBe("https://zoom.us/j/456");
+  });
+
+  it("keeps the existing joining link when the update has none", () => {
+    const withLink: Application = { ...application, joiningLink: "https://zoom.us/j/123" };
+    const updated = appendTimelineEvent(withLink, existingEvent, { joiningLink: null });
+    expect(updated.joiningLink).toBe("https://zoom.us/j/123");
   });
 });

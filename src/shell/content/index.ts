@@ -1,6 +1,7 @@
 import { appendTimelineEvent, findApplicationByThreadId } from "../../core/applicationMatching.js";
 import { confirmTracking } from "../../core/confirmTracking.js";
 import { resolveCompany } from "../../core/companyResolution.js";
+import { INITIAL_STAGE, applyStageSignal } from "../../core/stage.js";
 import type { TimelineEvent } from "../../core/types.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
 import type { ExtractThreadResponse, ExtractThreadRequest } from "../messages.js";
@@ -71,19 +72,26 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
 
     if (existingApplication) {
       const newEvent = buildInboundEvent(threadId, accountIndex, response.result.summary);
-      await repository.saveApplication(appendTimelineEvent(existingApplication, newEvent));
+      const updated = appendTimelineEvent(existingApplication, newEvent, {
+        stageSignal: response.result.stageSignal,
+        joiningLink: response.result.joiningLink,
+      });
+      await repository.saveApplication(updated);
       showToast("Job Tracker: added to the existing application's timeline.");
       return;
     }
 
     const companies = await repository.getCompanies();
     const { matchedCompanyId, suggestedName } = resolveCompany(companies, response.result.companyGuess);
+    const suggestedStage = applyStageSignal(INITIAL_STAGE, response.result.stageSignal);
 
     showConfirmPanel({
       extraction: response.result,
       companies,
       suggestedCompanyId: matchedCompanyId,
       suggestedName,
+      suggestedStage,
+      suggestedJoiningLink: response.result.joiningLink,
       onCancel: () => {},
       onConfirm: async (choice) => {
         const { application, newCompany } = confirmTracking({
@@ -95,6 +103,8 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
           newCompanyId: crypto.randomUUID(),
           companyGuessDomain: response.result.companyGuess?.domain,
           event: buildInboundEvent(threadId, accountIndex, response.result.summary),
+          stage: choice.stage,
+          joiningLink: choice.joiningLink,
         });
 
         try {

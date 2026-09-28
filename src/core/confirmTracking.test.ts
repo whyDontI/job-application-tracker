@@ -22,11 +22,30 @@ describe("confirmTracking", () => {
       newCompanyId: "co_new",
       companyGuessDomain: "acme.com",
       event,
+      stage: { name: "applied" },
+      joiningLink: null,
     });
 
     expect(result.newCompany).toBeNull();
     expect(result.application.companyId).toBe("co_1");
     expect(result.application.timelineEvents).toEqual([event]);
+  });
+
+  it("uses the confirmed stage and joining link as-is, without recomputing them", () => {
+    const result = confirmTracking({
+      applicationId: "app_1",
+      account: "nikhil@gmail.com",
+      sessionId: null,
+      createdAt: "2026-09-28T00:00:00.000Z",
+      companyChoice: { companyId: "co_1", newCompanyName: null },
+      newCompanyId: "co_new",
+      event,
+      stage: { name: "interview", round: 2 },
+      joiningLink: "https://zoom.us/j/123",
+    });
+
+    expect(result.application.stage).toEqual({ name: "interview", round: 2 });
+    expect(result.application.joiningLink).toBe("https://zoom.us/j/123");
   });
 
   it("creates a new company from the confirmed name and guessed domain when none was chosen", () => {
@@ -39,6 +58,8 @@ describe("confirmTracking", () => {
       newCompanyId: "co_new",
       companyGuessDomain: "acme.com",
       event,
+      stage: { name: "applied" },
+      joiningLink: null,
     });
 
     expect(result.newCompany).toEqual({ id: "co_new", name: "Acme Corp", domains: ["acme.com"] });
@@ -54,6 +75,8 @@ describe("confirmTracking", () => {
       companyChoice: { companyId: null, newCompanyName: "" },
       newCompanyId: "co_new",
       event,
+      stage: { name: "applied" },
+      joiningLink: null,
     });
 
     expect(result.newCompany?.name).toBe("Unknown company");

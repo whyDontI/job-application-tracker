@@ -1,3 +1,5 @@
+import type { Stage } from "./stage.js";
+
 export interface TimelineEvent {
   id: string;
   threadId: string;
@@ -14,6 +16,8 @@ export interface Application {
   sessionId: string | null;
   timelineEvents: TimelineEvent[];
   createdAt: string;
+  stage: Stage;
+  joiningLink: string | null;
 }
 
 export interface Company {

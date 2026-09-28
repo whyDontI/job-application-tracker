@@ -10,6 +10,8 @@ const application: Application = {
   sessionId: null,
   createdAt: "2026-09-28T00:00:00.000Z",
   timelineEvents: [],
+  stage: { name: "applied" },
+  joiningLink: null,
 };
 
 describe("createInMemoryRepository", () => {

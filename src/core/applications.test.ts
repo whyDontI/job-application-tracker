@@ -17,6 +17,8 @@ describe("createApplication", () => {
         summary: "Applied for Backend Engineer role.",
         deepLink: "https://mail.google.com/mail/u/0/#inbox/thread_1",
       },
+      stage: { name: "applied" },
+      joiningLink: null,
     });
 
     expect(application).toEqual({
@@ -25,6 +27,8 @@ describe("createApplication", () => {
       account: "nikhil@gmail.com",
       sessionId: "sess_1",
       createdAt: "2026-09-28T00:00:00.000Z",
+      stage: { name: "applied" },
+      joiningLink: null,
       timelineEvents: [
         {
           id: "evt_1",

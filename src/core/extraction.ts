@@ -1,3 +1,6 @@
+import { STAGE_NAMES } from "./stage.js";
+import type { StageSignal } from "./stage.js";
+
 export interface CompanyGuess {
   name: string;
   domain?: string;
@@ -6,6 +9,8 @@ export interface CompanyGuess {
 export interface ExtractionResult {
   companyGuess: CompanyGuess | null;
   summary: string;
+  stageSignal: StageSignal | null;
+  joiningLink: string | null;
 }
 
 export class ExtractionParseError extends Error {
@@ -46,6 +51,36 @@ function parseCompanyGuess(value: unknown): CompanyGuess | null {
   return domain ? { name: guess.name, domain } : { name: guess.name };
 }
 
+function parseStageSignal(value: unknown): StageSignal | null {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value !== "object") {
+    throw new ExtractionParseError("stageGuess must be an object or null");
+  }
+
+  const guess = value as Record<string, unknown>;
+  if (typeof guess.name !== "string" || !(STAGE_NAMES as readonly string[]).includes(guess.name)) {
+    throw new ExtractionParseError(`stageGuess.name must be one of: ${STAGE_NAMES.join(", ")}`);
+  }
+
+  const round = guess.round;
+  if (round !== undefined && (typeof round !== "number" || round <= 0 || !Number.isInteger(round))) {
+    throw new ExtractionParseError("stageGuess.round must be a positive integer when present");
+  }
+
+  return round === undefined
+    ? { name: guess.name as StageSignal["name"] }
+    : { name: guess.name as StageSignal["name"], round };
+}
+
+function parseJoiningLink(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value !== "string") {
+    throw new ExtractionParseError("joiningLink must be a string or null");
+  }
+  return value.trim() === "" ? null : value;
+}
+
 export function parseExtractionResponse(raw: string): ExtractionResult {
   const parsed = extractJsonObject(raw);
 
@@ -62,5 +97,7 @@ export function parseExtractionResponse(raw: string): ExtractionResult {
   return {
     companyGuess: parseCompanyGuess(body.companyGuess),
     summary: body.summary,
+    stageSignal: parseStageSignal(body.stageGuess),
+    joiningLink: parseJoiningLink(body.joiningLink),
   };
 }

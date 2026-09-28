@@ -1,4 +1,5 @@
 import { createChromeRepository } from "../storage/chromeRepository.js";
+import { formatStage } from "../stageDisplay.js";
 
 const repository = createChromeRepository();
 
@@ -26,6 +27,22 @@ async function render() {
     companyEl.className = "company";
     companyEl.textContent = company?.name ?? "Unknown company";
     card.appendChild(companyEl);
+
+    const stageEl = document.createElement("div");
+    stageEl.className = "stage";
+    stageEl.textContent = formatStage(application.stage);
+    card.appendChild(stageEl);
+
+    if (application.joiningLink) {
+      const joiningEl = document.createElement("div");
+      joiningEl.className = "joining-link";
+      const joiningAnchor = document.createElement("a");
+      joiningAnchor.href = application.joiningLink;
+      joiningAnchor.textContent = "Joining link";
+      joiningAnchor.target = "_blank";
+      joiningEl.appendChild(joiningAnchor);
+      card.appendChild(joiningEl);
+    }
 
     if (latestEvent) {
       const summaryEl = document.createElement("div");
