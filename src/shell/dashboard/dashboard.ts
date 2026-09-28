@@ -1,3 +1,4 @@
+import { groupApplicationsByStage } from "../../core/board.js";
 import {
   endActiveSession,
   getActiveSession,
@@ -9,7 +10,7 @@ import type { SessionScope } from "../../core/session.js";
 import { INITIAL_STAGE } from "../../core/stage.js";
 import type { Application, Company, Session } from "../../core/types.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
-import { formatStage } from "../stageDisplay.js";
+import { formatStage, STAGE_LABELS } from "../stageDisplay.js";
 
 const repository = createChromeRepository();
 
@@ -106,6 +107,63 @@ function buildSessionReassignSelect(application: Application, sessions: Session[
   return select;
 }
 
+function buildApplicationCard(
+  application: Application,
+  company: Company | undefined,
+  sessions: Session[]
+): HTMLDivElement {
+  const latestEvent = application.timelineEvents.at(-1);
+
+  const card = document.createElement("div");
+  card.className = "application";
+
+  const companyEl = document.createElement("div");
+  companyEl.className = "company";
+  companyEl.textContent = company?.name ?? "Unknown company";
+  card.appendChild(companyEl);
+
+  const stageEl = document.createElement("div");
+  stageEl.className = "stage";
+  stageEl.textContent = formatStage(application.stage ?? INITIAL_STAGE);
+  card.appendChild(stageEl);
+
+  if (application.joiningLink) {
+    const joiningEl = document.createElement("div");
+    joiningEl.className = "joining-link";
+    const joiningAnchor = document.createElement("a");
+    joiningAnchor.href = application.joiningLink;
+    joiningAnchor.textContent = "Joining link";
+    joiningAnchor.target = "_blank";
+    joiningEl.appendChild(joiningAnchor);
+    card.appendChild(joiningEl);
+  }
+
+  if (latestEvent) {
+    const summaryEl = document.createElement("div");
+    summaryEl.className = "summary";
+    summaryEl.textContent = latestEvent.summary;
+    card.appendChild(summaryEl);
+
+    const metaEl = document.createElement("div");
+    metaEl.className = "meta";
+    const link = document.createElement("a");
+    link.href = latestEvent.deepLink;
+    link.textContent = "Open thread in Gmail";
+    link.target = "_blank";
+    metaEl.appendChild(link);
+    card.appendChild(metaEl);
+  }
+
+  const sessionRow = document.createElement("div");
+  sessionRow.className = "session-row";
+  const sessionLabel = document.createElement("span");
+  sessionLabel.textContent = "Session: ";
+  sessionRow.append(sessionLabel, buildSessionReassignSelect(application, sessions));
+  card.appendChild(sessionRow);
+
+  return card;
+}
+
 function renderApplicationList(
   applications: Application[],
   companies: Company[],
@@ -114,64 +172,29 @@ function renderApplicationList(
   const companyById = new Map(companies.map((company) => [company.id, company]));
   const visibleApplications = selectApplicationsForSessionScope(applications, sessions, scope);
 
-  const list = document.getElementById("list") as HTMLDivElement;
+  const board = document.getElementById("board") as HTMLDivElement;
   const empty = document.getElementById("empty") as HTMLParagraphElement;
 
-  list.innerHTML = "";
+  board.innerHTML = "";
   empty.hidden = visibleApplications.length > 0;
 
-  for (const application of visibleApplications) {
-    const company = companyById.get(application.companyId);
-    const latestEvent = application.timelineEvents.at(-1);
+  for (const column of groupApplicationsByStage(visibleApplications)) {
+    const columnEl = document.createElement("div");
+    columnEl.className = "column";
 
-    const card = document.createElement("div");
-    card.className = "application";
+    const headerEl = document.createElement("div");
+    headerEl.className = "column-header";
+    headerEl.textContent = `${STAGE_LABELS[column.stage]} (${column.applications.length})`;
+    columnEl.appendChild(headerEl);
 
-    const companyEl = document.createElement("div");
-    companyEl.className = "company";
-    companyEl.textContent = company?.name ?? "Unknown company";
-    card.appendChild(companyEl);
-
-    const stageEl = document.createElement("div");
-    stageEl.className = "stage";
-    stageEl.textContent = formatStage(application.stage ?? INITIAL_STAGE);
-    card.appendChild(stageEl);
-
-    if (application.joiningLink) {
-      const joiningEl = document.createElement("div");
-      joiningEl.className = "joining-link";
-      const joiningAnchor = document.createElement("a");
-      joiningAnchor.href = application.joiningLink;
-      joiningAnchor.textContent = "Joining link";
-      joiningAnchor.target = "_blank";
-      joiningEl.appendChild(joiningAnchor);
-      card.appendChild(joiningEl);
+    const cardsEl = document.createElement("div");
+    cardsEl.className = "column-cards";
+    for (const application of column.applications) {
+      cardsEl.appendChild(buildApplicationCard(application, companyById.get(application.companyId), sessions));
     }
+    columnEl.appendChild(cardsEl);
 
-    if (latestEvent) {
-      const summaryEl = document.createElement("div");
-      summaryEl.className = "summary";
-      summaryEl.textContent = latestEvent.summary;
-      card.appendChild(summaryEl);
-
-      const metaEl = document.createElement("div");
-      metaEl.className = "meta";
-      const link = document.createElement("a");
-      link.href = latestEvent.deepLink;
-      link.textContent = "Open thread in Gmail";
-      link.target = "_blank";
-      metaEl.appendChild(link);
-      card.appendChild(metaEl);
-    }
-
-    const sessionRow = document.createElement("div");
-    sessionRow.className = "session-row";
-    const sessionLabel = document.createElement("span");
-    sessionLabel.textContent = "Session: ";
-    sessionRow.append(sessionLabel, buildSessionReassignSelect(application, sessions));
-    card.appendChild(sessionRow);
-
-    list.appendChild(card);
+    board.appendChild(columnEl);
   }
 }
 
