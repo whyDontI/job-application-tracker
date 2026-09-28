@@ -1,4 +1,4 @@
-import { applyStageSignal } from "./stage.js";
+import { INITIAL_STAGE, applyStageSignal } from "./stage.js";
 import type { StageSignal } from "./stage.js";
 import type { Application, TimelineEvent } from "./types.js";
 
@@ -28,10 +28,16 @@ export function appendTimelineEvent(
   event: TimelineEvent,
   updates: AppendTimelineEventUpdates = {}
 ): Application {
+  // `application.stage` can be missing on a record saved before the stage
+  // field existed (chrome.storage.local has no schema/migrations) — default
+  // it so an older record doesn't crash the first time it's touched again;
+  // the write below then persists it with a proper stage from here on.
+  const currentStage = application.stage ?? INITIAL_STAGE;
+
   return {
     ...application,
     timelineEvents: [...application.timelineEvents, event],
-    stage: applyStageSignal(application.stage, updates.stageSignal ?? null),
-    joiningLink: updates.joiningLink ?? application.joiningLink,
+    stage: applyStageSignal(currentStage, updates.stageSignal ?? null),
+    joiningLink: updates.joiningLink ?? application.joiningLink ?? null,
   };
 }

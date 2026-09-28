@@ -80,4 +80,19 @@ describe("appendTimelineEvent", () => {
     const updated = appendTimelineEvent(withLink, existingEvent, { joiningLink: null });
     expect(updated.joiningLink).toBe("https://zoom.us/j/123");
   });
+
+  it("defaults a pre-stage-field record (stage/joiningLink missing from storage) to Applied instead of throwing", () => {
+    const legacyApplication = { ...application } as Application;
+    // @ts-expect-error simulating a record persisted before `stage`/`joiningLink` existed
+    delete legacyApplication.stage;
+    // @ts-expect-error same, for joiningLink
+    delete legacyApplication.joiningLink;
+
+    const updated = appendTimelineEvent(legacyApplication, existingEvent, {
+      stageSignal: { name: "recruiter_screen" },
+    });
+
+    expect(updated.stage).toEqual({ name: "recruiter_screen" });
+    expect(updated.joiningLink).toBeNull();
+  });
 });

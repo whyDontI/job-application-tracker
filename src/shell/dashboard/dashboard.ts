@@ -1,3 +1,4 @@
+import { INITIAL_STAGE } from "../../core/stage.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
 import { formatStage } from "../stageDisplay.js";
 
@@ -30,7 +31,7 @@ async function render() {
 
     const stageEl = document.createElement("div");
     stageEl.className = "stage";
-    stageEl.textContent = formatStage(application.stage);
+    stageEl.textContent = formatStage(application.stage ?? INITIAL_STAGE);
     card.appendChild(stageEl);
 
     if (application.joiningLink) {
