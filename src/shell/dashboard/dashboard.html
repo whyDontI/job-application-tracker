@@ -93,6 +93,33 @@
       .reassign-session {
         font-size: 12px;
       }
+      #viewToggle {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 16px;
+      }
+      #viewToggle button.active {
+        font-weight: 600;
+        background: #e8f0fe;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid #eee;
+      }
+      th.sortable {
+        cursor: pointer;
+        user-select: none;
+      }
+      th.sortable:hover {
+        color: #1a73e8;
+      }
     </style>
   </head>
   <body>
@@ -103,7 +130,25 @@
       <button id="startSession">Start New Hunt</button>
       <button id="endSession" hidden>End Current Hunt</button>
     </div>
+    <div id="viewToggle">
+      <button id="showBoard" class="active">Board</button>
+      <button id="showTable">Table</button>
+    </div>
     <div id="board"></div>
+    <table id="table" hidden>
+      <thead>
+        <tr>
+          <th class="sortable" data-sort-key="company">Company</th>
+          <th class="sortable" data-sort-key="stage">Stage</th>
+          <th>Round</th>
+          <th>Joining Link</th>
+          <th>Last Follow-up</th>
+          <th class="sortable" data-sort-key="daysSinceFollowUp">Days Since Follow-up</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
     <p id="empty" hidden>No applications tracked yet. Open a job-related email in Gmail and click the tracker button.</p>
     <script src="./dashboard.js"></script>
   </body>

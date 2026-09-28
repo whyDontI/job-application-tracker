@@ -8,6 +8,8 @@ import {
 } from "../../core/session.js";
 import type { SessionScope } from "../../core/session.js";
 import { INITIAL_STAGE } from "../../core/stage.js";
+import { buildTableRows, sortTableRows } from "../../core/table.js";
+import type { SortDirection, TableSortKey } from "../../core/table.js";
 import type { Application, Company, Session } from "../../core/types.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
 import { formatStage, STAGE_LABELS } from "../stageDisplay.js";
@@ -17,7 +19,15 @@ const repository = createChromeRepository();
 const UNASSIGNED_VALUE = "__unassigned__";
 const ALL_SESSIONS_VALUE = "__all__";
 
+const SORT_HEADER_LABELS: Record<TableSortKey, string> = {
+  company: "Company",
+  stage: "Stage",
+  daysSinceFollowUp: "Days Since Follow-up",
+};
+
 let scope: SessionScope = { kind: "active" };
+let currentView: "board" | "table" = "board";
+let tableSort: { key: TableSortKey; direction: SortDirection } = { key: "company", direction: "asc" };
 
 async function refresh(): Promise<void> {
   const [applications, companies, sessions] = await Promise.all([
@@ -27,7 +37,7 @@ async function refresh(): Promise<void> {
   ]);
 
   renderSessionControls(sessions);
-  renderApplicationList(applications, companies, sessions);
+  renderViews(applications, companies, sessions);
 }
 
 function renderSessionControls(sessions: Session[]): void {
@@ -164,19 +174,10 @@ function buildApplicationCard(
   return card;
 }
 
-function renderApplicationList(
-  applications: Application[],
-  companies: Company[],
-  sessions: Session[]
-): void {
+function renderBoard(visibleApplications: Application[], companies: Company[], sessions: Session[]): void {
   const companyById = new Map(companies.map((company) => [company.id, company]));
-  const visibleApplications = selectApplicationsForSessionScope(applications, sessions, scope);
-
   const board = document.getElementById("board") as HTMLDivElement;
-  const empty = document.getElementById("empty") as HTMLParagraphElement;
-
   board.innerHTML = "";
-  empty.hidden = visibleApplications.length > 0;
 
   for (const column of groupApplicationsByStage(visibleApplications)) {
     const columnEl = document.createElement("div");
@@ -196,6 +197,70 @@ function renderApplicationList(
 
     board.appendChild(columnEl);
   }
+}
+
+function renderTable(visibleApplications: Application[], companies: Company[]): void {
+  const rows = sortTableRows(
+    buildTableRows(visibleApplications, companies, new Date()),
+    tableSort.key,
+    tableSort.direction
+  );
+
+  const tableBody = document.getElementById("tableBody") as HTMLTableSectionElement;
+  tableBody.innerHTML = "";
+
+  for (const row of rows) {
+    const stage = row.application.stage ?? INITIAL_STAGE;
+    const tr = document.createElement("tr");
+
+    const companyTd = document.createElement("td");
+    companyTd.textContent = row.companyName;
+
+    const stageTd = document.createElement("td");
+    stageTd.textContent = STAGE_LABELS[stage.name];
+
+    const roundTd = document.createElement("td");
+    roundTd.textContent = stage.name === "interview" ? String(stage.round) : "—";
+
+    const joiningTd = document.createElement("td");
+    if (row.application.joiningLink) {
+      const joiningAnchor = document.createElement("a");
+      joiningAnchor.href = row.application.joiningLink;
+      joiningAnchor.textContent = "Joining link";
+      joiningAnchor.target = "_blank";
+      joiningTd.appendChild(joiningAnchor);
+    } else {
+      joiningTd.textContent = "—";
+    }
+
+    const lastFollowUpTd = document.createElement("td");
+    lastFollowUpTd.textContent = row.lastFollowUpAt ? new Date(row.lastFollowUpAt).toLocaleDateString() : "—";
+
+    const daysSinceTd = document.createElement("td");
+    daysSinceTd.textContent = row.daysSinceFollowUp === null ? "—" : String(row.daysSinceFollowUp);
+
+    const statusTd = document.createElement("td");
+    statusTd.textContent = formatStage(stage);
+
+    tr.append(companyTd, stageTd, roundTd, joiningTd, lastFollowUpTd, daysSinceTd, statusTd);
+    tableBody.appendChild(tr);
+  }
+
+  for (const header of document.querySelectorAll<HTMLTableCellElement>("th.sortable")) {
+    const key = header.dataset.sortKey as TableSortKey;
+    const baseLabel = SORT_HEADER_LABELS[key];
+    header.textContent =
+      key === tableSort.key ? `${baseLabel} ${tableSort.direction === "asc" ? "▲" : "▼"}` : baseLabel;
+  }
+}
+
+function renderViews(applications: Application[], companies: Company[], sessions: Session[]): void {
+  const visibleApplications = selectApplicationsForSessionScope(applications, sessions, scope);
+  const empty = document.getElementById("empty") as HTMLParagraphElement;
+  empty.hidden = visibleApplications.length > 0;
+
+  renderBoard(visibleApplications, companies, sessions);
+  renderTable(visibleApplications, companies);
 }
 
 function initSessionControls(): void {
@@ -250,5 +315,45 @@ function initSessionControls(): void {
   });
 }
 
+function initViewToggle(): void {
+  const board = document.getElementById("board") as HTMLDivElement;
+  const table = document.getElementById("table") as HTMLTableElement;
+  const showBoardButton = document.getElementById("showBoard") as HTMLButtonElement;
+  const showTableButton = document.getElementById("showTable") as HTMLButtonElement;
+
+  function apply(): void {
+    board.hidden = currentView !== "board";
+    table.hidden = currentView !== "table";
+    showBoardButton.classList.toggle("active", currentView === "board");
+    showTableButton.classList.toggle("active", currentView === "table");
+  }
+
+  showBoardButton.addEventListener("click", () => {
+    currentView = "board";
+    apply();
+  });
+  showTableButton.addEventListener("click", () => {
+    currentView = "table";
+    apply();
+  });
+
+  apply();
+}
+
+function initTableSorting(): void {
+  for (const header of document.querySelectorAll<HTMLTableCellElement>("th.sortable")) {
+    header.addEventListener("click", () => {
+      const key = header.dataset.sortKey as TableSortKey;
+      tableSort =
+        tableSort.key === key
+          ? { key, direction: tableSort.direction === "asc" ? "desc" : "asc" }
+          : { key, direction: "asc" };
+      void refresh();
+    });
+  }
+}
+
 initSessionControls();
+initViewToggle();
+initTableSorting();
 void refresh();
