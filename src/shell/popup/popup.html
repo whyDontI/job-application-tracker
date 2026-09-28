@@ -14,7 +14,8 @@
         font-size: 12px;
         margin-bottom: 4px;
       }
-      input {
+      input,
+      select {
         width: 100%;
         box-sizing: border-box;
         padding: 6px;
@@ -31,9 +32,11 @@
     </style>
   </head>
   <body>
-    <h3>Claude API Key</h3>
-    <label for="apiKey">Your key (stored locally only)</label>
-    <input id="apiKey" type="password" placeholder="sk-ant-..." />
+    <h3>AI Provider</h3>
+    <label for="provider">Provider</label>
+    <select id="provider"></select>
+    <label for="apiKey">API key for this provider (stored locally only)</label>
+    <input id="apiKey" type="password" placeholder="paste key..." />
     <button id="save">Save</button>
     <div id="status"></div>
     <hr />
