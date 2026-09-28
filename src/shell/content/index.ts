@@ -8,15 +8,13 @@ import { createChromeRepository } from "../storage/chromeRepository.js";
 import type { ExtractThreadResponse, ExtractThreadRequest } from "../messages.js";
 import { showConfirmPanel } from "./confirmPanel.js";
 import { makeDraggableEdgeButton } from "./draggableEdgeButton.js";
-import type { DraggableEdgeButtonOptions } from "./draggableEdgeButton.js";
 import {
-  FOLLOWUP_BUTTON_ID,
-  TRACK_BUTTON_ID,
+  MENU_BUTTON_ID,
+  MENU_ID,
   buildThreadDeepLink,
   extractThreadIdFromUrl,
   getCurrentGmailAccount,
   getGmailAccountIndex,
-  isSentThreadOpen,
   isThreadOpen,
   scrapeOpenThread,
 } from "./gmailDom.js";
@@ -179,13 +177,10 @@ function ensureDragHandleStyleInjected(): void {
   if (document.getElementById(DRAG_HANDLE_STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = DRAG_HANDLE_STYLE_ID;
-  style.textContent = [TRACK_BUTTON_ID, FOLLOWUP_BUTTON_ID]
-    .map(
-      (id) =>
-        `#${id} .job-tracker-drag-handle { opacity: 0; transition: opacity 0.15s ease; }
-         #${id}:hover .job-tracker-drag-handle { opacity: 1; }`
-    )
-    .join("\n");
+  style.textContent = `
+    #${MENU_BUTTON_ID} .job-tracker-drag-handle { opacity: 0; transition: opacity 0.15s ease; }
+    #${MENU_BUTTON_ID}:hover .job-tracker-drag-handle { opacity: 1; }
+  `;
   document.head.appendChild(style);
 }
 
@@ -202,17 +197,29 @@ function createDragHandle(): HTMLSpanElement {
   return handle;
 }
 
-function createFloatingButton(
-  id: string,
-  labelText: string,
-  onClick: (button: HTMLButtonElement) => void,
-  dragOptions: DraggableEdgeButtonOptions
-): HTMLButtonElement {
+function createMenuIcon(): SVGSVGElement {
+  // Placeholder glyph (a bookmark) until real branding is supplied — see
+  // ticket #14. Anything more specific than "this is the tracker" risks
+  // implying a logo that doesn't exist yet.
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute("d", "M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z");
+  svg.appendChild(path);
+  return svg;
+}
+
+function createMenuButton(): HTMLButtonElement {
   ensureDragHandleStyleInjected();
 
   const button = document.createElement("button");
-  button.id = id;
+  button.id = MENU_BUTTON_ID;
   button.type = "button";
+  button.setAttribute("aria-label", "Job Tracker");
   // Docked to the right edge, outside Gmail's own DOM tree — see the note in
   // gmailDom.ts on why we don't inject into Gmail's toolbar. Vertically
   // draggable along the edge (see draggableEdgeButton.ts); "top" is set by
@@ -232,45 +239,136 @@ function createFloatingButton(
     "color:#fff",
     "cursor:grab",
     "touch-action:none",
-    "font-family:system-ui,sans-serif",
-    "font-size:12px",
-    "font-weight:600",
     "box-shadow:-2px 2px 8px rgba(0,0,0,0.25)",
   ].join(";");
 
-  const label = document.createElement("span");
-  label.className = "job-tracker-label";
-  label.textContent = labelText;
-
-  button.append(createDragHandle(), label);
-  makeDraggableEdgeButton(button, () => onClick(button), dragOptions);
+  button.append(createDragHandle(), createMenuIcon());
+  makeDraggableEdgeButton(button, toggleMenu);
   return button;
 }
 
-function getOrCreateButton(
-  id: string,
-  labelText: string,
-  onClick: (button: HTMLButtonElement) => void,
-  dragOptions: DraggableEdgeButtonOptions
-): HTMLButtonElement {
-  const existing = document.getElementById(id) as HTMLButtonElement | null;
+function getOrCreateMenuButton(): HTMLButtonElement {
+  const existing = document.getElementById(MENU_BUTTON_ID) as HTMLButtonElement | null;
   if (existing) return existing;
-  const button = createFloatingButton(id, labelText, onClick, dragOptions);
+  const button = createMenuButton();
   document.body.appendChild(button);
   return button;
 }
 
-function syncButtonVisibility(): void {
-  const trackButton = getOrCreateButton(TRACK_BUTTON_ID, "Track", (button) => void handleTrackClick(button), {});
-  trackButton.style.display = isThreadOpen() ? "block" : "none";
+function createMenuItem(labelText: string): HTMLButtonElement {
+  const item = document.createElement("button");
+  item.type = "button";
+  item.textContent = labelText;
+  item.style.cssText = [
+    "display:block",
+    "width:100%",
+    "text-align:left",
+    "padding:10px 14px",
+    "border:none",
+    "background:#fff",
+    "color:#202124",
+    "cursor:pointer",
+    "font:inherit",
+  ].join(";");
+  item.addEventListener("mouseenter", () => {
+    if (!item.disabled) item.style.background = "#f1f3f4";
+  });
+  item.addEventListener("mouseleave", () => {
+    item.style.background = "#fff";
+  });
+  return item;
+}
 
-  const followUpButton = getOrCreateButton(
-    FOLLOWUP_BUTTON_ID,
-    "Log Follow-up",
-    (button) => void handleFollowUpClick(button),
-    { storageKey: "jobTrackerFollowUpButtonTop", defaultTopRatio: 0.55 }
-  );
-  followUpButton.style.display = isSentThreadOpen() ? "block" : "none";
+function setMenuItemEnabled(item: HTMLButtonElement, enabled: boolean, disabledReason: string): void {
+  item.disabled = !enabled;
+  item.style.color = enabled ? "#202124" : "#9aa0a6";
+  item.style.cursor = enabled ? "pointer" : "not-allowed";
+  item.title = enabled ? "" : disabledReason;
+}
+
+let menuOpen = false;
+let openMenuRequestId = 0;
+
+function createMenu(): { menu: HTMLDivElement; trackItem: HTMLButtonElement; followUpItem: HTMLButtonElement } {
+  const menu = document.createElement("div");
+  menu.id = MENU_ID;
+  menu.hidden = true;
+  menu.style.cssText = [
+    "position:fixed",
+    "z-index:2147483647",
+    "min-width:170px",
+    "background:#fff",
+    "border:1px solid #dadce0",
+    "border-radius:8px",
+    "box-shadow:0 4px 16px rgba(0,0,0,0.25)",
+    "overflow:hidden",
+    "font-family:system-ui,sans-serif",
+    "font-size:13px",
+  ].join(";");
+
+  const trackItem = createMenuItem("Track Application");
+  const followUpItem = createMenuItem("Log Follow-up");
+  menu.append(trackItem, followUpItem);
+  document.body.appendChild(menu);
+  return { menu, trackItem, followUpItem };
+}
+
+const menuButton = getOrCreateMenuButton();
+const { menu, trackItem, followUpItem } = createMenu();
+
+function closeMenu(): void {
+  menuOpen = false;
+  menu.hidden = true;
+  document.removeEventListener("pointerdown", handleOutsidePointerDown, true);
+}
+
+function handleOutsidePointerDown(event: PointerEvent): void {
+  const target = event.target as Node | null;
+  if (target && (menu.contains(target) || menuButton.contains(target))) return;
+  closeMenu();
+}
+
+async function openMenu(): Promise<void> {
+  const rect = menuButton.getBoundingClientRect();
+  menu.style.top = `${rect.top}px`;
+  menu.style.right = `${window.innerWidth - rect.left + 8}px`;
+  menu.hidden = false;
+  menuOpen = true;
+  document.addEventListener("pointerdown", handleOutsidePointerDown, true);
+
+  setMenuItemEnabled(followUpItem, false, "");
+  const requestId = ++openMenuRequestId;
+  const threadId = extractThreadIdFromUrl();
+  const applications = threadId ? await repository.getApplications() : [];
+  const hasMatch = threadId !== null && findApplicationByThreadId(applications, threadId) !== undefined;
+  // Stale if the menu was closed, or reopened again (for the same or a
+  // different thread) while this lookup was in flight — only the most
+  // recent open() is allowed to settle the item's enabled state.
+  if (!menuOpen || requestId !== openMenuRequestId) return;
+  setMenuItemEnabled(followUpItem, hasMatch, "Track the original email first");
+}
+
+function toggleMenu(): void {
+  if (menuOpen) {
+    closeMenu();
+  } else {
+    void openMenu();
+  }
+}
+
+trackItem.addEventListener("click", () => {
+  closeMenu();
+  void handleTrackClick(trackItem);
+});
+followUpItem.addEventListener("click", () => {
+  if (followUpItem.disabled) return;
+  closeMenu();
+  void handleFollowUpClick(followUpItem);
+});
+
+function syncButtonVisibility(): void {
+  menuButton.style.display = isThreadOpen() ? "block" : "none";
+  if (!isThreadOpen()) closeMenu();
 }
 
 window.addEventListener("hashchange", syncButtonVisibility);
