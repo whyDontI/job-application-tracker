@@ -11,6 +11,12 @@ import { INITIAL_STAGE } from "../../core/stage.js";
 import { buildTableRows, sortTableRows } from "../../core/table.js";
 import type { SortDirection, TableSortKey } from "../../core/table.js";
 import type { Application, Company, Session } from "../../core/types.js";
+import {
+  DASHBOARD_VIEW_STORAGE_KEY,
+  DEFAULT_DASHBOARD_VIEW,
+  isDashboardView,
+} from "../dashboardViewConfig.js";
+import type { DashboardView } from "../dashboardViewConfig.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
 import { formatStage, STAGE_LABELS } from "../stageDisplay.js";
 
@@ -26,7 +32,7 @@ const SORT_HEADER_LABELS: Record<TableSortKey, string> = {
 };
 
 let scope: SessionScope = { kind: "active" };
-let currentView: "board" | "table" = "board";
+let currentView: DashboardView = DEFAULT_DASHBOARD_VIEW;
 let tableSort: { key: TableSortKey; direction: SortDirection } = { key: "company", direction: "asc" };
 
 async function refresh(): Promise<void> {
@@ -328,16 +334,26 @@ function initViewToggle(): void {
     showTableButton.classList.toggle("active", currentView === "table");
   }
 
-  showBoardButton.addEventListener("click", () => {
-    currentView = "board";
+  function selectView(view: DashboardView): void {
+    currentView = view;
     apply();
-  });
-  showTableButton.addEventListener("click", () => {
-    currentView = "table";
-    apply();
-  });
+    void savePreferredView(view);
+  }
+
+  showBoardButton.addEventListener("click", () => selectView("board"));
+  showTableButton.addEventListener("click", () => selectView("table"));
 
   apply();
+}
+
+async function loadPreferredView(): Promise<DashboardView> {
+  const stored = await chrome.storage.local.get(DASHBOARD_VIEW_STORAGE_KEY);
+  const value = stored[DASHBOARD_VIEW_STORAGE_KEY];
+  return isDashboardView(value) ? value : DEFAULT_DASHBOARD_VIEW;
+}
+
+async function savePreferredView(view: DashboardView): Promise<void> {
+  await chrome.storage.local.set({ [DASHBOARD_VIEW_STORAGE_KEY]: view });
 }
 
 function initTableSorting(): void {
@@ -353,7 +369,12 @@ function initTableSorting(): void {
   }
 }
 
-initSessionControls();
-initViewToggle();
-initTableSorting();
-void refresh();
+async function init(): Promise<void> {
+  currentView = await loadPreferredView();
+  initSessionControls();
+  initViewToggle();
+  initTableSorting();
+  await refresh();
+}
+
+void init();
