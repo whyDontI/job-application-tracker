@@ -48,10 +48,38 @@
       #empty {
         color: #888;
       }
+      #sessionBar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid #ddd;
+      }
+      #sessionStatus {
+        font-size: 13px;
+        color: #444;
+        margin-right: auto;
+      }
+      .session-row {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #666;
+      }
+      .reassign-session {
+        font-size: 12px;
+      }
     </style>
   </head>
   <body>
     <h1>Job Applications</h1>
+    <div id="sessionBar">
+      <div id="sessionStatus"></div>
+      <select id="sessionScope"></select>
+      <button id="startSession">Start New Hunt</button>
+      <button id="endSession" hidden>End Current Hunt</button>
+    </div>
     <div id="list"></div>
     <p id="empty" hidden>No applications tracked yet. Open a job-related email in Gmail and click the tracker button.</p>
     <script src="./dashboard.js"></script>

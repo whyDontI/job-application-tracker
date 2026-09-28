@@ -26,6 +26,21 @@ export interface Company {
   domains: string[];
 }
 
+export interface Session {
+  id: string;
+  name: string;
+  startedAt: string;
+  /** null while the session is active; set once the user ends/archives it. */
+  endedAt: string | null;
+}
+
+/** Shared shape both repository implementations (chrome.storage.local and the in-memory test double) build each collection from. */
+export interface StoredCollection<T extends { id: string }> {
+  getAll(): Promise<T[]>;
+  save(item: T): Promise<void>;
+  remove(id: string): Promise<void>;
+}
+
 export interface Repository {
   getApplications(): Promise<Application[]>;
   saveApplication(application: Application): Promise<void>;
@@ -33,4 +48,7 @@ export interface Repository {
   getCompanies(): Promise<Company[]>;
   saveCompany(company: Company): Promise<void>;
   deleteCompany(id: string): Promise<void>;
+  getSessions(): Promise<Session[]>;
+  saveSession(session: Session): Promise<void>;
+  deleteSession(id: string): Promise<void>;
 }

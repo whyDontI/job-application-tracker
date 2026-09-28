@@ -1,6 +1,7 @@
 import { appendTimelineEvent, findApplicationByThreadId } from "../../core/applicationMatching.js";
 import { confirmTracking } from "../../core/confirmTracking.js";
 import { resolveCompany } from "../../core/companyResolution.js";
+import { getActiveSession } from "../../core/session.js";
 import { INITIAL_STAGE, applyStageSignal } from "../../core/stage.js";
 import type { TimelineEvent } from "../../core/types.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
@@ -84,6 +85,7 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
     const companies = await repository.getCompanies();
     const { matchedCompanyId, suggestedName } = resolveCompany(companies, response.result.companyGuess);
     const suggestedStage = applyStageSignal(INITIAL_STAGE, response.result.stageSignal);
+    const activeSessionId = getActiveSession(await repository.getSessions())?.id ?? null;
 
     showConfirmPanel({
       extraction: response.result,
@@ -97,7 +99,7 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
         const { application, newCompany } = confirmTracking({
           applicationId: crypto.randomUUID(),
           account: getCurrentGmailAccount(accountIndex),
-          sessionId: null,
+          sessionId: activeSessionId,
           createdAt: new Date().toISOString(),
           companyChoice: choice,
           newCompanyId: crypto.randomUUID(),

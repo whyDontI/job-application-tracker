@@ -1,34 +1,38 @@
-import type { Application, Company, Repository } from "./types.js";
+import type { Application, Company, Repository, Session, StoredCollection } from "./types.js";
+
+function createMapCollection<T extends { id: string }>(seed: T[] = []): StoredCollection<T> {
+  const items = new Map<string, T>(seed.map((item) => [item.id, item]));
+  return {
+    async getAll() {
+      return [...items.values()];
+    },
+    async save(item) {
+      items.set(item.id, item);
+    },
+    async remove(id) {
+      items.delete(id);
+    },
+  };
+}
 
 export function createInMemoryRepository(seed?: {
   applications?: Application[];
   companies?: Company[];
+  sessions?: Session[];
 }): Repository {
-  const applications = new Map<string, Application>(
-    (seed?.applications ?? []).map((application) => [application.id, application])
-  );
-  const companies = new Map<string, Company>(
-    (seed?.companies ?? []).map((company) => [company.id, company])
-  );
+  const applications = createMapCollection<Application>(seed?.applications);
+  const companies = createMapCollection<Company>(seed?.companies);
+  const sessions = createMapCollection<Session>(seed?.sessions);
 
   return {
-    async getApplications() {
-      return [...applications.values()];
-    },
-    async saveApplication(application) {
-      applications.set(application.id, application);
-    },
-    async deleteApplication(id) {
-      applications.delete(id);
-    },
-    async getCompanies() {
-      return [...companies.values()];
-    },
-    async saveCompany(company) {
-      companies.set(company.id, company);
-    },
-    async deleteCompany(id) {
-      companies.delete(id);
-    },
+    getApplications: () => applications.getAll(),
+    saveApplication: (application) => applications.save(application),
+    deleteApplication: (id) => applications.remove(id),
+    getCompanies: () => companies.getAll(),
+    saveCompany: (company) => companies.save(company),
+    deleteCompany: (id) => companies.remove(id),
+    getSessions: () => sessions.getAll(),
+    saveSession: (session) => sessions.save(session),
+    deleteSession: (id) => sessions.remove(id),
   };
 }

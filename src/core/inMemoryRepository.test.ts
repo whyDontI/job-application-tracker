@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createInMemoryRepository } from "./inMemoryRepository.js";
-import type { Application, Company } from "./types.js";
+import type { Application, Company, Session } from "./types.js";
 
 const company: Company = { id: "co_1", name: "Acme Corp", domains: ["acme.com"] };
+const session: Session = {
+  id: "sess_1",
+  name: "Spring hunt",
+  startedAt: "2026-09-28T00:00:00.000Z",
+  endedAt: null,
+};
 const application: Application = {
   id: "app_1",
   companyId: "co_1",
@@ -50,5 +56,19 @@ describe("createInMemoryRepository", () => {
 
     await repo.deleteCompany(company.id);
     expect(await repo.getCompanies()).toEqual([]);
+  });
+
+  it("round-trips a saved session and deletes it by id", async () => {
+    const repo = createInMemoryRepository();
+    await repo.saveSession(session);
+    expect(await repo.getSessions()).toEqual([session]);
+
+    await repo.deleteSession(session.id);
+    expect(await repo.getSessions()).toEqual([]);
+  });
+
+  it("seeds initial sessions", async () => {
+    const repo = createInMemoryRepository({ sessions: [session] });
+    expect(await repo.getSessions()).toEqual([session]);
   });
 });
