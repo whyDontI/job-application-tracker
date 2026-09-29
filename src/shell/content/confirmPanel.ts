@@ -1,5 +1,5 @@
 import type { ExtractionResult } from "../../core/extraction.js";
-import { STAGE_NAMES } from "../../core/stage.js";
+import { AI_DETECTABLE_STAGE_NAMES } from "../../core/stage.js";
 import type { Stage, StageName } from "../../core/stage.js";
 import type { Company } from "../../core/types.js";
 import { STAGE_LABELS } from "../stageDisplay.js";
@@ -83,7 +83,7 @@ export function showConfirmPanel(options: {
 
   const stageSelect = document.createElement("select");
   stageSelect.style.cssText = "width:100%;padding:4px;margin-bottom:8px;";
-  for (const name of STAGE_NAMES) {
+  for (const name of AI_DETECTABLE_STAGE_NAMES) {
     const opt = document.createElement("option");
     opt.value = name;
     opt.textContent = STAGE_LABELS[name];

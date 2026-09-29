@@ -1,4 +1,10 @@
-export const STAGE_NAMES = [
+/**
+ * The subset of stages the AI is allowed to detect from email text. "Ghosted"
+ * is deliberately excluded: it's never inferred automatically, only set via
+ * the user's own explicit confirmation (see ghosted.ts's confirmGhosted) —
+ * an email never says "you've been ghosted," silence does.
+ */
+export const AI_DETECTABLE_STAGE_NAMES = [
   "applied",
   "recruiter_screen",
   "interview",
@@ -6,6 +12,8 @@ export const STAGE_NAMES = [
   "rejected",
   "withdrawn",
 ] as const;
+
+export const STAGE_NAMES = [...AI_DETECTABLE_STAGE_NAMES, "ghosted"] as const;
 
 export type StageName = (typeof STAGE_NAMES)[number];
 
@@ -15,7 +23,8 @@ export type Stage =
   | { name: "interview"; round: number }
   | { name: "offer" }
   | { name: "rejected" }
-  | { name: "withdrawn" };
+  | { name: "withdrawn" }
+  | { name: "ghosted" };
 
 /**
  * A stage change detected from a single message. `round` is only meaningful
@@ -24,7 +33,7 @@ export type Stage =
  * applyStageSignal infers it by incrementing.
  */
 export interface StageSignal {
-  name: StageName;
+  name: (typeof AI_DETECTABLE_STAGE_NAMES)[number];
   round?: number;
 }
 
@@ -39,8 +48,8 @@ const FORWARD_STAGE_RANK: Record<ForwardStageName, number> = {
   offer: 3,
 };
 
-function isTerminal(name: StageName): name is "rejected" | "withdrawn" {
-  return name === "rejected" || name === "withdrawn";
+export function isTerminal(name: StageName): name is "rejected" | "withdrawn" | "ghosted" {
+  return name === "rejected" || name === "withdrawn" || name === "ghosted";
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { INITIAL_STAGE, applyStageSignal } from "./stage.js";
+import { INITIAL_STAGE, applyStageSignal, isTerminal } from "./stage.js";
 import type { Stage } from "./stage.js";
 
 describe("applyStageSignal", () => {
@@ -94,5 +94,26 @@ describe("applyStageSignal", () => {
     const current: Stage = { name: "rejected" };
     expect(applyStageSignal(current, { name: "interview", round: 1 })).toEqual(current);
     expect(applyStageSignal(current, { name: "applied" })).toEqual(current);
+  });
+
+  it("never leaves 'ghosted' once manually confirmed, even on a later AI-detected signal", () => {
+    const current: Stage = { name: "ghosted" };
+    expect(applyStageSignal(current, { name: "interview", round: 1 })).toEqual(current);
+    expect(applyStageSignal(current, { name: "offer" })).toEqual(current);
+  });
+});
+
+describe("isTerminal", () => {
+  it("treats rejected, withdrawn, and ghosted as terminal", () => {
+    expect(isTerminal("rejected")).toBe(true);
+    expect(isTerminal("withdrawn")).toBe(true);
+    expect(isTerminal("ghosted")).toBe(true);
+  });
+
+  it("treats every other stage as non-terminal", () => {
+    expect(isTerminal("applied")).toBe(false);
+    expect(isTerminal("recruiter_screen")).toBe(false);
+    expect(isTerminal("interview")).toBe(false);
+    expect(isTerminal("offer")).toBe(false);
   });
 });

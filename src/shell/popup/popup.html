@@ -40,6 +40,12 @@
     <button id="save">Save</button>
     <div id="status"></div>
     <hr />
+    <h3>Ghosted flag</h3>
+    <label for="ghostedThreshold">Flag as "possibly ghosted" after this many days of no reply</label>
+    <input id="ghostedThreshold" type="number" min="1" step="1" />
+    <button id="saveGhostedThreshold">Save</button>
+    <div id="ghostedThresholdStatus"></div>
+    <hr />
     <button id="openDashboard">Open Dashboard</button>
     <script src="./popup.js"></script>
   </body>

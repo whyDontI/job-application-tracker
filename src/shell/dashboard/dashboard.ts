@@ -1,4 +1,5 @@
 import { groupApplicationsByStage } from "../../core/board.js";
+import { confirmGhosted, isPossiblyGhosted } from "../../core/ghosted.js";
 import {
   endActiveSession,
   getActiveSession,
@@ -17,6 +18,11 @@ import {
   isDashboardView,
 } from "../dashboardViewConfig.js";
 import type { DashboardView } from "../dashboardViewConfig.js";
+import {
+  DEFAULT_GHOSTED_THRESHOLD_DAYS,
+  GHOSTED_THRESHOLD_STORAGE_KEY,
+  isValidGhostedThreshold,
+} from "../ghostedConfig.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
 import { formatStage, STAGE_LABELS } from "../stageDisplay.js";
 
@@ -33,6 +39,7 @@ const SORT_HEADER_LABELS: Record<TableSortKey, string> = {
 
 let scope: SessionScope = { kind: "active" };
 let currentView: DashboardView = DEFAULT_DASHBOARD_VIEW;
+let ghostedThresholdDays: number = DEFAULT_GHOSTED_THRESHOLD_DAYS;
 let tableSort: { key: TableSortKey; direction: SortDirection } = { key: "company", direction: "asc" };
 
 async function refresh(): Promise<void> {
@@ -123,6 +130,34 @@ function buildSessionReassignSelect(application: Application, sessions: Session[
   return select;
 }
 
+function handleConfirmGhosted(application: Application): void {
+  if (!window.confirm("Mark this application as Ghosted? This can't be undone from here.")) return;
+  void repository.saveApplication(confirmGhosted(application)).then(refresh);
+}
+
+/**
+ * A suggestion, never the actual status — so it's always paired with a
+ * manual "Mark as Ghosted" action rather than silently flipping the stage.
+ */
+function buildGhostedBadge(application: Application): HTMLElement | null {
+  if (!isPossiblyGhosted(application, new Date(), ghostedThresholdDays)) return null;
+
+  const wrapper = document.createElement("span");
+  wrapper.className = "ghosted-badge";
+
+  const label = document.createElement("span");
+  label.textContent = "Possibly Ghosted";
+  wrapper.appendChild(label);
+
+  const confirmButton = document.createElement("button");
+  confirmButton.type = "button";
+  confirmButton.textContent = "Mark as Ghosted";
+  confirmButton.addEventListener("click", () => handleConfirmGhosted(application));
+  wrapper.appendChild(confirmButton);
+
+  return wrapper;
+}
+
 function buildApplicationCard(
   application: Application,
   company: Company | undefined,
@@ -142,6 +177,9 @@ function buildApplicationCard(
   stageEl.className = "stage";
   stageEl.textContent = formatStage(application.stage ?? INITIAL_STAGE);
   card.appendChild(stageEl);
+
+  const ghostedBadge = buildGhostedBadge(application);
+  if (ghostedBadge) card.appendChild(ghostedBadge);
 
   if (application.joiningLink) {
     const joiningEl = document.createElement("div");
@@ -246,7 +284,9 @@ function renderTable(visibleApplications: Application[], companies: Company[]): 
     daysSinceTd.textContent = row.daysSinceFollowUp === null ? "—" : String(row.daysSinceFollowUp);
 
     const statusTd = document.createElement("td");
-    statusTd.textContent = formatStage(stage);
+    statusTd.append(formatStage(stage));
+    const ghostedBadge = buildGhostedBadge(row.application);
+    if (ghostedBadge) statusTd.appendChild(ghostedBadge);
 
     tr.append(companyTd, stageTd, roundTd, joiningTd, lastFollowUpTd, daysSinceTd, statusTd);
     tableBody.appendChild(tr);
@@ -356,6 +396,12 @@ async function savePreferredView(view: DashboardView): Promise<void> {
   await chrome.storage.local.set({ [DASHBOARD_VIEW_STORAGE_KEY]: view });
 }
 
+async function loadGhostedThreshold(): Promise<number> {
+  const stored = await chrome.storage.local.get(GHOSTED_THRESHOLD_STORAGE_KEY);
+  const value = stored[GHOSTED_THRESHOLD_STORAGE_KEY];
+  return isValidGhostedThreshold(value) ? value : DEFAULT_GHOSTED_THRESHOLD_DAYS;
+}
+
 function initTableSorting(): void {
   for (const header of document.querySelectorAll<HTMLTableCellElement>("th.sortable")) {
     header.addEventListener("click", () => {
@@ -371,6 +417,7 @@ function initTableSorting(): void {
 
 async function init(): Promise<void> {
   currentView = await loadPreferredView();
+  ghostedThresholdDays = await loadGhostedThreshold();
   initSessionControls();
   initViewToggle();
   initTableSorting();

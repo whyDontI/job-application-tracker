@@ -7,6 +7,7 @@ export const STAGE_LABELS: Record<StageName, string> = {
   offer: "Offer",
   rejected: "Rejected",
   withdrawn: "Withdrawn",
+  ghosted: "Ghosted",
 };
 
 export function formatStage(stage: Stage): string {

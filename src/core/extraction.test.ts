@@ -72,6 +72,11 @@ describe("parseExtractionResponse", () => {
     expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
   });
 
+  it("throws ExtractionParseError when stageGuess.name is 'ghosted' — never AI-detectable, only set via manual confirmation", () => {
+    const raw = JSON.stringify({ companyGuess: null, summary: "x", stageGuess: { name: "ghosted" } });
+    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
+  });
+
   it("throws ExtractionParseError when stageGuess.round is not a positive integer", () => {
     const raw = JSON.stringify({
       companyGuess: null,

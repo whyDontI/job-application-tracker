@@ -1,4 +1,4 @@
-import { STAGE_NAMES } from "./stage.js";
+import { AI_DETECTABLE_STAGE_NAMES } from "./stage.js";
 import type { StageSignal } from "./stage.js";
 
 export interface CompanyGuess {
@@ -59,8 +59,11 @@ function parseStageSignal(value: unknown): StageSignal | null {
   }
 
   const guess = value as Record<string, unknown>;
-  if (typeof guess.name !== "string" || !(STAGE_NAMES as readonly string[]).includes(guess.name)) {
-    throw new ExtractionParseError(`stageGuess.name must be one of: ${STAGE_NAMES.join(", ")}`);
+  if (
+    typeof guess.name !== "string" ||
+    !(AI_DETECTABLE_STAGE_NAMES as readonly string[]).includes(guess.name)
+  ) {
+    throw new ExtractionParseError(`stageGuess.name must be one of: ${AI_DETECTABLE_STAGE_NAMES.join(", ")}`);
   }
 
   const round = guess.round;
