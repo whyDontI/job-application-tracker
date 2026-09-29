@@ -1,10 +1,9 @@
 import type { ExtractionResult } from "../../core/extraction.js";
 import { AI_DETECTABLE_STAGE_NAMES } from "../../core/stage.js";
-import type { Stage, StageName } from "../../core/stage.js";
+import type { Stage } from "../../core/stage.js";
 import type { Company } from "../../core/types.js";
-import { STAGE_LABELS } from "../stageDisplay.js";
-
-const CREATE_NEW_VALUE = "__create_new__";
+import { buildCompanyPicker, readCompanyChoice } from "../companyPicker.js";
+import { buildStagePicker, readStage } from "../stagePicker.js";
 
 export interface ConfirmPanelChoice {
   companyId: string | null;
@@ -42,71 +41,16 @@ export function showConfirmPanel(options: {
   companyLabel.style.cssText = "display:block;margin-bottom:4px;";
   overlay.appendChild(companyLabel);
 
-  const companySelect = document.createElement("select");
-  companySelect.style.cssText = "width:100%;padding:4px;margin-bottom:8px;";
-  for (const company of options.companies) {
-    const opt = document.createElement("option");
-    opt.value = company.id;
-    opt.textContent = company.name;
-    companySelect.appendChild(opt);
-  }
-  const createOpt = document.createElement("option");
-  createOpt.value = CREATE_NEW_VALUE;
-  createOpt.textContent = "+ Create new company";
-  companySelect.appendChild(createOpt);
-
-  const hasSuggestedExisting =
-    options.suggestedCompanyId !== null &&
-    options.companies.some((c) => c.id === options.suggestedCompanyId);
-  companySelect.value = hasSuggestedExisting
-    ? (options.suggestedCompanyId as string)
-    : CREATE_NEW_VALUE;
-  overlay.appendChild(companySelect);
-
-  const newNameInput = document.createElement("input");
-  newNameInput.type = "text";
-  newNameInput.placeholder = "New company name";
-  newNameInput.value = options.suggestedName;
-  newNameInput.style.cssText = `width:100%;box-sizing:border-box;padding:4px;margin-bottom:10px;display:${
-    companySelect.value === CREATE_NEW_VALUE ? "block" : "none"
-  };`;
-  overlay.appendChild(newNameInput);
-
-  companySelect.addEventListener("change", () => {
-    newNameInput.style.display = companySelect.value === CREATE_NEW_VALUE ? "block" : "none";
-  });
+  const companyPicker = buildCompanyPicker(options.companies, options.suggestedCompanyId, options.suggestedName);
+  overlay.append(companyPicker.select, companyPicker.newNameInput);
 
   const stageLabel = document.createElement("label");
   stageLabel.textContent = "Stage";
   stageLabel.style.cssText = "display:block;margin-bottom:4px;";
   overlay.appendChild(stageLabel);
 
-  const stageSelect = document.createElement("select");
-  stageSelect.style.cssText = "width:100%;padding:4px;margin-bottom:8px;";
-  for (const name of AI_DETECTABLE_STAGE_NAMES) {
-    const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = STAGE_LABELS[name];
-    stageSelect.appendChild(opt);
-  }
-  stageSelect.value = options.suggestedStage.name;
-  overlay.appendChild(stageSelect);
-
-  const roundInput = document.createElement("input");
-  roundInput.type = "number";
-  roundInput.min = "1";
-  roundInput.placeholder = "Round number";
-  roundInput.value = String(
-    options.suggestedStage.name === "interview" ? options.suggestedStage.round : 1
-  );
-  roundInput.style.cssText = `width:100%;box-sizing:border-box;padding:4px;margin-bottom:8px;display:${
-    stageSelect.value === "interview" ? "block" : "none"
-  };`;
-  overlay.appendChild(roundInput);
-
-  stageSelect.addEventListener("change", () => {
-    roundInput.style.display = stageSelect.value === "interview" ? "block" : "none";
-  });
+  const stagePicker = buildStagePicker(AI_DETECTABLE_STAGE_NAMES, options.suggestedStage);
+  overlay.append(stagePicker.select, stagePicker.roundInput);
 
   const linkLabel = document.createElement("label");
   linkLabel.textContent = "Joining/meeting link (optional)";
@@ -133,17 +77,9 @@ export function showConfirmPanel(options: {
   const confirmButton = document.createElement("button");
   confirmButton.textContent = "Save";
   confirmButton.addEventListener("click", () => {
-    const stageName = stageSelect.value as StageName;
-    const stage: Stage =
-      stageName === "interview"
-        ? { name: "interview", round: Math.max(1, Number.parseInt(roundInput.value, 10) || 1) }
-        : { name: stageName };
-
     const choice: ConfirmPanelChoice = {
-      ...(companySelect.value === CREATE_NEW_VALUE
-        ? { companyId: null, newCompanyName: newNameInput.value.trim() }
-        : { companyId: companySelect.value, newCompanyName: null }),
-      stage,
+      ...readCompanyChoice(companyPicker),
+      stage: readStage(stagePicker),
       joiningLink: linkInput.value.trim() || null,
     };
     overlay.remove();

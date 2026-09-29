@@ -1,3 +1,6 @@
+import { applyApplicationEdits } from "../../core/applicationEditing.js";
+import type { ApplicationEditableFields } from "../../core/applicationEditing.js";
+import { createApplication } from "../../core/applications.js";
 import { groupApplicationsByStage } from "../../core/board.js";
 import { confirmGhosted, isPossiblyGhosted } from "../../core/ghosted.js";
 import {
@@ -12,6 +15,8 @@ import { INITIAL_STAGE } from "../../core/stage.js";
 import { buildTableRows, sortTableRows } from "../../core/table.js";
 import type { SortDirection, TableSortKey } from "../../core/table.js";
 import type { Application, Company, Session } from "../../core/types.js";
+import { showApplicationEditor } from "./applicationEditor.js";
+import type { ApplicationEditorFields } from "./applicationEditor.js";
 import {
   DASHBOARD_VIEW_STORAGE_KEY,
   DEFAULT_DASHBOARD_VIEW,
@@ -136,6 +141,96 @@ function handleConfirmGhosted(application: Application): void {
 }
 
 /**
+ * Backs both "Edit Application" (application given) and "Add Application"
+ * (application null) — same form, same save path, just a different starting
+ * point and whether a Delete option is offered.
+ */
+function openApplicationEditor(
+  application: Application | null,
+  companies: Company[],
+  sessions: Session[]
+): void {
+  const initial: ApplicationEditorFields = application
+    ? {
+        companyId: application.companyId,
+        stage: application.stage ?? INITIAL_STAGE,
+        joiningLink: application.joiningLink,
+        notes: application.notes ?? "",
+        createdAt: application.createdAt,
+        sessionId: application.sessionId,
+      }
+    : {
+        companyId: null,
+        stage: INITIAL_STAGE,
+        joiningLink: null,
+        notes: "",
+        createdAt: new Date().toISOString(),
+        sessionId: getActiveSession(sessions)?.id ?? null,
+      };
+
+  showApplicationEditor({
+    title: application ? "Edit Application" : "Add Application",
+    companies,
+    sessions,
+    initial,
+    onCancel: () => {},
+    onDelete: application
+      ? () => void repository.deleteApplication(application.id).then(refresh)
+      : undefined,
+    onSave: (result) => {
+      void (async () => {
+        let companyId = result.companyId;
+        if (!companyId) {
+          const newCompany: Company = {
+            id: crypto.randomUUID(),
+            name: result.newCompanyName || "Unknown company",
+            domains: [],
+          };
+          await repository.saveCompany(newCompany);
+          companyId = newCompany.id;
+        }
+
+        const edits: ApplicationEditableFields = {
+          companyId,
+          stage: result.stage,
+          joiningLink: result.joiningLink,
+          notes: result.notes,
+          createdAt: result.createdAt,
+          sessionId: result.sessionId,
+        };
+
+        if (application) {
+          await repository.saveApplication(applyApplicationEdits(application, edits));
+        } else {
+          await repository.saveApplication(
+            createApplication({
+              id: crypto.randomUUID(),
+              companyId: edits.companyId,
+              account: "manual",
+              sessionId: edits.sessionId,
+              createdAt: edits.createdAt,
+              stage: edits.stage,
+              joiningLink: edits.joiningLink,
+              notes: edits.notes,
+            })
+          );
+        }
+        await refresh();
+      })();
+    },
+  });
+}
+
+function buildEditButton(application: Application, companies: Company[], sessions: Session[]): HTMLButtonElement {
+  const editButton = document.createElement("button");
+  editButton.type = "button";
+  editButton.className = "edit-application";
+  editButton.textContent = "Edit";
+  editButton.addEventListener("click", () => openApplicationEditor(application, companies, sessions));
+  return editButton;
+}
+
+/**
  * A suggestion, never the actual status — so it's always paired with a
  * manual "Mark as Ghosted" action rather than silently flipping the stage.
  */
@@ -161,6 +256,7 @@ function buildGhostedBadge(application: Application): HTMLElement | null {
 function buildApplicationCard(
   application: Application,
   company: Company | undefined,
+  companies: Company[],
   sessions: Session[]
 ): HTMLDivElement {
   const latestEvent = application.timelineEvents.at(-1);
@@ -168,10 +264,17 @@ function buildApplicationCard(
   const card = document.createElement("div");
   card.className = "application";
 
+  const headerRow = document.createElement("div");
+  headerRow.className = "card-header";
+
   const companyEl = document.createElement("div");
   companyEl.className = "company";
   companyEl.textContent = company?.name ?? "Unknown company";
-  card.appendChild(companyEl);
+  headerRow.appendChild(companyEl);
+
+  headerRow.appendChild(buildEditButton(application, companies, sessions));
+
+  card.appendChild(headerRow);
 
   const stageEl = document.createElement("div");
   stageEl.className = "stage";
@@ -235,7 +338,9 @@ function renderBoard(visibleApplications: Application[], companies: Company[], s
     const cardsEl = document.createElement("div");
     cardsEl.className = "column-cards";
     for (const application of column.applications) {
-      cardsEl.appendChild(buildApplicationCard(application, companyById.get(application.companyId), sessions));
+      cardsEl.appendChild(
+        buildApplicationCard(application, companyById.get(application.companyId), companies, sessions)
+      );
     }
     columnEl.appendChild(cardsEl);
 
@@ -243,7 +348,7 @@ function renderBoard(visibleApplications: Application[], companies: Company[], s
   }
 }
 
-function renderTable(visibleApplications: Application[], companies: Company[]): void {
+function renderTable(visibleApplications: Application[], companies: Company[], sessions: Session[]): void {
   const rows = sortTableRows(
     buildTableRows(visibleApplications, companies, new Date()),
     tableSort.key,
@@ -288,7 +393,10 @@ function renderTable(visibleApplications: Application[], companies: Company[]): 
     const ghostedBadge = buildGhostedBadge(row.application);
     if (ghostedBadge) statusTd.appendChild(ghostedBadge);
 
-    tr.append(companyTd, stageTd, roundTd, joiningTd, lastFollowUpTd, daysSinceTd, statusTd);
+    const actionsTd = document.createElement("td");
+    actionsTd.appendChild(buildEditButton(row.application, companies, sessions));
+
+    tr.append(companyTd, stageTd, roundTd, joiningTd, lastFollowUpTd, daysSinceTd, statusTd, actionsTd);
     tableBody.appendChild(tr);
   }
 
@@ -306,7 +414,7 @@ function renderViews(applications: Application[], companies: Company[], sessions
   empty.hidden = visibleApplications.length > 0;
 
   renderBoard(visibleApplications, companies, sessions);
-  renderTable(visibleApplications, companies);
+  renderTable(visibleApplications, companies, sessions);
 }
 
 function initSessionControls(): void {
@@ -415,12 +523,22 @@ function initTableSorting(): void {
   }
 }
 
+function initAddApplication(): void {
+  const addButton = document.getElementById("addApplication") as HTMLButtonElement;
+  addButton.addEventListener("click", () => {
+    void Promise.all([repository.getCompanies(), repository.getSessions()]).then(([companies, sessions]) =>
+      openApplicationEditor(null, companies, sessions)
+    );
+  });
+}
+
 async function init(): Promise<void> {
   currentView = await loadPreferredView();
   ghostedThresholdDays = await loadGhostedThreshold();
   initSessionControls();
   initViewToggle();
   initTableSorting();
+  initAddApplication();
   await refresh();
 }
 

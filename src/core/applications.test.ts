@@ -29,6 +29,7 @@ describe("createApplication", () => {
       createdAt: "2026-09-28T00:00:00.000Z",
       stage: { name: "applied" },
       joiningLink: null,
+      notes: "",
       timelineEvents: [
         {
           id: "evt_1",
@@ -39,6 +40,31 @@ describe("createApplication", () => {
           deepLink: "https://mail.google.com/mail/u/0/#inbox/thread_1",
         },
       ],
+    });
+  });
+
+  it("builds an Application with no timeline events and the given notes, for a manually-added application with no tracked email", () => {
+    const application = createApplication({
+      id: "app_2",
+      companyId: "co_1",
+      account: "manual",
+      sessionId: null,
+      createdAt: "2026-09-28T00:00:00.000Z",
+      stage: { name: "applied" },
+      joiningLink: null,
+      notes: "Applied via the company's careers page.",
+    });
+
+    expect(application).toEqual({
+      id: "app_2",
+      companyId: "co_1",
+      account: "manual",
+      sessionId: null,
+      createdAt: "2026-09-28T00:00:00.000Z",
+      stage: { name: "applied" },
+      joiningLink: null,
+      notes: "Applied via the company's careers page.",
+      timelineEvents: [],
     });
   });
 });

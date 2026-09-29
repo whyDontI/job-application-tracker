@@ -39,8 +39,23 @@
         padding: 12px 16px;
         background: #fff;
       }
+      .card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+      }
       .company {
         font-weight: 600;
+      }
+      .edit-application {
+        font-size: 11px;
+        color: #444;
+        background: #fff;
+        border: 1px solid #dadce0;
+        border-radius: 4px;
+        padding: 1px 6px;
+        cursor: pointer;
       }
       .stage {
         display: inline-block;
@@ -156,6 +171,7 @@
     <div id="viewToggle">
       <button id="showBoard" class="active">Board</button>
       <button id="showTable">Table</button>
+      <button id="addApplication" style="margin-left: auto">+ Add Application</button>
     </div>
     <div id="board"></div>
     <table id="table" hidden>
@@ -168,6 +184,7 @@
           <th>Last Follow-up</th>
           <th class="sortable" data-sort-key="daysSinceFollowUp">Days Since Follow-up</th>
           <th>Status</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody id="tableBody"></tbody>

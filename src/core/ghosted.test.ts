@@ -24,6 +24,7 @@ function makeApplication(overrides: Partial<Application>): Application {
     timelineEvents: [],
     stage: { name: "applied" },
     joiningLink: null,
+    notes: "",
     ...overrides,
   };
 }

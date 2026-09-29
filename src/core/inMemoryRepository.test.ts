@@ -18,6 +18,7 @@ const application: Application = {
   timelineEvents: [],
   stage: { name: "applied" },
   joiningLink: null,
+  notes: "",
 };
 
 describe("createInMemoryRepository", () => {

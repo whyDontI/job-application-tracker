@@ -18,6 +18,7 @@ export interface Application {
   createdAt: string;
   stage: Stage;
   joiningLink: string | null;
+  notes: string;
 }
 
 export interface Company {

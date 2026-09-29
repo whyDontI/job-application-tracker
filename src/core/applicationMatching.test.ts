@@ -20,6 +20,7 @@ const application: Application = {
   timelineEvents: [existingEvent],
   stage: { name: "applied" },
   joiningLink: null,
+  notes: "",
 };
 
 describe("findApplicationByThreadId", () => {
