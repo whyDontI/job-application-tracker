@@ -12,11 +12,14 @@ import {
 } from "../../core/session.js";
 import type { SessionScope } from "../../core/session.js";
 import { INITIAL_STAGE } from "../../core/stage.js";
+import { computeSankeyEdges, filterApplicationsByStartDate } from "../../core/sankey.js";
+import type { DateRange } from "../../core/sankey.js";
 import { buildTableRows, sortTableRows } from "../../core/table.js";
 import type { SortDirection, TableSortKey } from "../../core/table.js";
 import type { Application, Company, Session } from "../../core/types.js";
 import { showApplicationEditor } from "./applicationEditor.js";
 import type { ApplicationEditorFields } from "./applicationEditor.js";
+import { renderSankeyChart } from "./sankeyChart.js";
 import {
   DASHBOARD_VIEW_STORAGE_KEY,
   DEFAULT_DASHBOARD_VIEW,
@@ -46,6 +49,7 @@ let scope: SessionScope = { kind: "active" };
 let currentView: DashboardView = DEFAULT_DASHBOARD_VIEW;
 let ghostedThresholdDays: number = DEFAULT_GHOSTED_THRESHOLD_DAYS;
 let tableSort: { key: TableSortKey; direction: SortDirection } = { key: "company", direction: "asc" };
+let sankeyDateRange: DateRange = {};
 
 async function refresh(): Promise<void> {
   const [applications, companies, sessions] = await Promise.all([
@@ -414,6 +418,12 @@ function renderTable(visibleApplications: Application[], companies: Company[], s
   }
 }
 
+function renderSankey(visibleApplications: Application[]): void {
+  const container = document.getElementById("sankey") as HTMLDivElement;
+  const scoped = filterApplicationsByStartDate(visibleApplications, sankeyDateRange);
+  renderSankeyChart(container, computeSankeyEdges(scoped));
+}
+
 function renderViews(applications: Application[], companies: Company[], sessions: Session[]): void {
   const visibleApplications = selectApplicationsForSessionScope(applications, sessions, scope);
   const empty = document.getElementById("empty") as HTMLParagraphElement;
@@ -421,6 +431,7 @@ function renderViews(applications: Application[], companies: Company[], sessions
 
   renderBoard(visibleApplications, companies, sessions);
   renderTable(visibleApplications, companies, sessions);
+  renderSankey(visibleApplications);
 }
 
 function initSessionControls(): void {
@@ -478,14 +489,18 @@ function initSessionControls(): void {
 function initViewToggle(): void {
   const board = document.getElementById("board") as HTMLDivElement;
   const table = document.getElementById("table") as HTMLTableElement;
+  const sankeyWrapper = document.getElementById("sankeyWrapper") as HTMLDivElement;
   const showBoardButton = document.getElementById("showBoard") as HTMLButtonElement;
   const showTableButton = document.getElementById("showTable") as HTMLButtonElement;
+  const showSankeyButton = document.getElementById("showSankey") as HTMLButtonElement;
 
   function apply(): void {
     board.hidden = currentView !== "board";
     table.hidden = currentView !== "table";
+    sankeyWrapper.hidden = currentView !== "sankey";
     showBoardButton.classList.toggle("active", currentView === "board");
     showTableButton.classList.toggle("active", currentView === "table");
+    showSankeyButton.classList.toggle("active", currentView === "sankey");
   }
 
   function selectView(view: DashboardView): void {
@@ -496,8 +511,31 @@ function initViewToggle(): void {
 
   showBoardButton.addEventListener("click", () => selectView("board"));
   showTableButton.addEventListener("click", () => selectView("table"));
+  showSankeyButton.addEventListener("click", () => selectView("sankey"));
 
   apply();
+}
+
+function initSankeyDateRangeFilter(): void {
+  const fromInput = document.getElementById("sankeyFrom") as HTMLInputElement;
+  const toInput = document.getElementById("sankeyTo") as HTMLInputElement;
+  const applyButton = document.getElementById("sankeyApplyRange") as HTMLButtonElement;
+  const clearButton = document.getElementById("sankeyClearRange") as HTMLButtonElement;
+
+  applyButton.addEventListener("click", () => {
+    sankeyDateRange = {
+      from: fromInput.value ? `${fromInput.value}T00:00:00.000Z` : undefined,
+      to: toInput.value ? `${toInput.value}T23:59:59.999Z` : undefined,
+    };
+    void refresh();
+  });
+
+  clearButton.addEventListener("click", () => {
+    fromInput.value = "";
+    toInput.value = "";
+    sankeyDateRange = {};
+    void refresh();
+  });
 }
 
 async function loadPreferredView(): Promise<DashboardView> {
@@ -545,6 +583,7 @@ async function init(): Promise<void> {
   initViewToggle();
   initTableSorting();
   initAddApplication();
+  initSankeyDateRangeFilter();
   await refresh();
 }
 

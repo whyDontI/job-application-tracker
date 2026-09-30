@@ -158,6 +158,24 @@
       th.sortable:hover {
         color: #1a73e8;
       }
+      #sankeyWrapper {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+      }
+      #sankeyFilters {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+      #sankeyFilters label {
+        color: #444;
+      }
+      #sankey {
+        overflow-x: auto;
+      }
     </style>
   </head>
   <body>
@@ -171,9 +189,21 @@
     <div id="viewToggle">
       <button id="showBoard" class="active">Board</button>
       <button id="showTable">Table</button>
+      <button id="showSankey">Sankey</button>
       <button id="addApplication" style="margin-left: auto">+ Add Application</button>
     </div>
     <div id="board"></div>
+    <div id="sankeyWrapper" hidden>
+      <div id="sankeyFilters">
+        <label for="sankeyFrom">Started from</label>
+        <input id="sankeyFrom" type="date" />
+        <label for="sankeyTo">to</label>
+        <input id="sankeyTo" type="date" />
+        <button id="sankeyApplyRange">Apply</button>
+        <button id="sankeyClearRange">Clear</button>
+      </div>
+      <div id="sankey"></div>
+    </div>
     <table id="table" hidden>
       <thead>
         <tr>

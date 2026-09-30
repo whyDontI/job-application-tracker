@@ -1,4 +1,4 @@
-export const DASHBOARD_VIEWS = ["board", "table"] as const;
+export const DASHBOARD_VIEWS = ["board", "table", "sankey"] as const;
 export type DashboardView = (typeof DASHBOARD_VIEWS)[number];
 
 export function isDashboardView(value: unknown): value is DashboardView {
