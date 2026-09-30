@@ -158,6 +158,7 @@ function openApplicationEditor(
         notes: application.notes ?? "",
         createdAt: application.createdAt,
         sessionId: application.sessionId,
+        stageHistory: application.stageHistory ?? [],
       }
     : {
         companyId: null,
@@ -166,6 +167,7 @@ function openApplicationEditor(
         notes: "",
         createdAt: new Date().toISOString(),
         sessionId: getActiveSession(sessions)?.id ?? null,
+        stageHistory: [],
       };
 
   showApplicationEditor({
@@ -197,6 +199,7 @@ function openApplicationEditor(
           notes: result.notes,
           createdAt: result.createdAt,
           sessionId: result.sessionId,
+          stageHistory: result.stageHistory,
         };
 
         if (application) {
@@ -212,6 +215,9 @@ function openApplicationEditor(
               stage: edits.stage,
               joiningLink: edits.joiningLink,
               notes: edits.notes,
+              // stageHistory omitted — a brand-new application always starts with
+              // an empty history (nothing to edit yet), so createApplication's
+              // single-entry-for-`stage` default is what we want here.
             })
           );
         }

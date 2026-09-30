@@ -19,6 +19,8 @@ const application: Application = {
   stage: { name: "applied" },
   joiningLink: null,
   notes: "",
+  stageHistory: [],
+  trackedMessageCount: 0,
 };
 
 describe("createInMemoryRepository", () => {

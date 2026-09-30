@@ -6,14 +6,14 @@ describe("parseExtractionResponse", () => {
     const raw = JSON.stringify({
       companyGuess: { name: "Acme Corp", domain: "acme.com" },
       summary: "Applied for Backend Engineer role, confirmation received.",
-      stageGuess: null,
+      stagesByMessage: [],
       joiningLink: null,
     });
 
     expect(parseExtractionResponse(raw)).toEqual({
       companyGuess: { name: "Acme Corp", domain: "acme.com" },
       summary: "Applied for Backend Engineer role, confirmation received.",
-      stageSignal: null,
+      stageSignalsByMessage: [],
       joiningLink: null,
     });
   });
@@ -27,29 +27,25 @@ describe("parseExtractionResponse", () => {
     expect(parseExtractionResponse(raw).companyGuess).toBeNull();
   });
 
-  it("parses a stage guess with an explicit round", () => {
+  it("parses stage guesses for multiple messages, each with its own message index", () => {
     const raw = JSON.stringify({
       companyGuess: null,
-      summary: "Scheduled for a second interview.",
-      stageGuess: { name: "interview", round: 2 },
+      summary: "Progressed from recruiter screen to a second interview.",
+      stagesByMessage: [
+        { messageIndex: 1, stageGuess: { name: "recruiter_screen" } },
+        { messageIndex: 3, stageGuess: { name: "interview", round: 2 } },
+      ],
     });
 
-    expect(parseExtractionResponse(raw).stageSignal).toEqual({ name: "interview", round: 2 });
+    expect(parseExtractionResponse(raw).stageSignalsByMessage).toEqual([
+      { messageIndex: 1, stageSignal: { name: "recruiter_screen" } },
+      { messageIndex: 3, stageSignal: { name: "interview", round: 2 } },
+    ]);
   });
 
-  it("parses a stage guess with no round", () => {
-    const raw = JSON.stringify({
-      companyGuess: null,
-      summary: "Application received.",
-      stageGuess: { name: "applied" },
-    });
-
-    expect(parseExtractionResponse(raw).stageSignal).toEqual({ name: "applied" });
-  });
-
-  it("defaults stageSignal to null when stageGuess is omitted", () => {
+  it("defaults stageSignalsByMessage to an empty array when stagesByMessage is omitted", () => {
     const raw = JSON.stringify({ companyGuess: null, summary: "x" });
-    expect(parseExtractionResponse(raw).stageSignal).toBeNull();
+    expect(parseExtractionResponse(raw).stageSignalsByMessage).toEqual([]);
   });
 
   it("parses a joining link when present", () => {
@@ -67,22 +63,50 @@ describe("parseExtractionResponse", () => {
     expect(parseExtractionResponse(raw).joiningLink).toBeNull();
   });
 
-  it("throws ExtractionParseError when stageGuess.name is not a known stage", () => {
-    const raw = JSON.stringify({ companyGuess: null, summary: "x", stageGuess: { name: "bogus" } });
-    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
-  });
-
-  it("throws ExtractionParseError when stageGuess.name is 'ghosted' — never AI-detectable, only set via manual confirmation", () => {
-    const raw = JSON.stringify({ companyGuess: null, summary: "x", stageGuess: { name: "ghosted" } });
-    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
-  });
-
-  it("throws ExtractionParseError when stageGuess.round is not a positive integer", () => {
+  it("throws ExtractionParseError when a stageGuess.name is not a known stage", () => {
     const raw = JSON.stringify({
       companyGuess: null,
       summary: "x",
-      stageGuess: { name: "interview", round: -1 },
+      stagesByMessage: [{ messageIndex: 0, stageGuess: { name: "bogus" } }],
     });
+    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
+  });
+
+  it("throws ExtractionParseError when a stageGuess.name is 'ghosted' — never AI-detectable, only set via manual confirmation", () => {
+    const raw = JSON.stringify({
+      companyGuess: null,
+      summary: "x",
+      stagesByMessage: [{ messageIndex: 0, stageGuess: { name: "ghosted" } }],
+    });
+    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
+  });
+
+  it("throws ExtractionParseError when a stageGuess.round is not a positive integer", () => {
+    const raw = JSON.stringify({
+      companyGuess: null,
+      summary: "x",
+      stagesByMessage: [{ messageIndex: 0, stageGuess: { name: "interview", round: -1 } }],
+    });
+    expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
+  });
+
+  it("throws ExtractionParseError when a messageIndex is missing or negative", () => {
+    const missing = JSON.stringify({
+      companyGuess: null,
+      summary: "x",
+      stagesByMessage: [{ stageGuess: { name: "applied" } }],
+    });
+    const negative = JSON.stringify({
+      companyGuess: null,
+      summary: "x",
+      stagesByMessage: [{ messageIndex: -1, stageGuess: { name: "applied" } }],
+    });
+    expect(() => parseExtractionResponse(missing)).toThrow(ExtractionParseError);
+    expect(() => parseExtractionResponse(negative)).toThrow(ExtractionParseError);
+  });
+
+  it("throws ExtractionParseError when stagesByMessage is not an array", () => {
+    const raw = JSON.stringify({ companyGuess: null, summary: "x", stagesByMessage: "nope" });
     expect(() => parseExtractionResponse(raw)).toThrow(ExtractionParseError);
   });
 

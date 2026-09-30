@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { INITIAL_STAGE, applyStageSignal, isTerminal } from "./stage.js";
+import { INITIAL_STAGE, applyStageSignal, isTerminal, stagesEqual } from "./stage.js";
 import type { Stage } from "./stage.js";
 
 describe("applyStageSignal", () => {
@@ -115,5 +115,20 @@ describe("isTerminal", () => {
     expect(isTerminal("recruiter_screen")).toBe(false);
     expect(isTerminal("interview")).toBe(false);
     expect(isTerminal("offer")).toBe(false);
+  });
+});
+
+describe("stagesEqual", () => {
+  it("is true for the same non-round stage", () => {
+    expect(stagesEqual({ name: "offer" }, { name: "offer" })).toBe(true);
+  });
+
+  it("is false for different stages", () => {
+    expect(stagesEqual({ name: "offer" }, { name: "rejected" })).toBe(false);
+  });
+
+  it("compares the round when both are interview", () => {
+    expect(stagesEqual({ name: "interview", round: 2 }, { name: "interview", round: 2 })).toBe(true);
+    expect(stagesEqual({ name: "interview", round: 1 }, { name: "interview", round: 2 })).toBe(false);
   });
 });

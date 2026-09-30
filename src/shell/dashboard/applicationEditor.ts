@@ -1,7 +1,8 @@
 import { STAGE_NAMES } from "../../core/stage.js";
 import type { Stage } from "../../core/stage.js";
-import type { Company, Session } from "../../core/types.js";
+import type { Company, Session, StageHistoryEntry } from "../../core/types.js";
 import { buildCompanyPicker, readCompanyChoice } from "../companyPicker.js";
+import { formatStage } from "../stageDisplay.js";
 import { buildStagePicker, readStage } from "../stagePicker.js";
 
 const UNASSIGNED_VALUE = "__unassigned__";
@@ -13,6 +14,7 @@ export interface ApplicationEditorFields {
   notes: string;
   createdAt: string;
   sessionId: string | null;
+  stageHistory: StageHistoryEntry[];
 }
 
 export interface ApplicationEditorResult {
@@ -23,6 +25,7 @@ export interface ApplicationEditorResult {
   notes: string;
   createdAt: string;
   sessionId: string | null;
+  stageHistory: StageHistoryEntry[];
 }
 
 /**
@@ -101,6 +104,37 @@ export function showApplicationEditor(options: {
   notesInput.style.cssText = "width:100%;box-sizing:border-box;padding:4px;margin-bottom:10px;resize:vertical;";
   overlay.appendChild(notesInput);
 
+  addLabel("Stage History");
+  const historyDateInputs: HTMLInputElement[] = [];
+  if (options.initial.stageHistory.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "No dated stages yet.";
+    empty.style.cssText = "color:#666;margin-bottom:10px;";
+    overlay.appendChild(empty);
+  } else {
+    const historyList = document.createElement("div");
+    historyList.style.cssText = "margin-bottom:10px;";
+    for (const entry of options.initial.stageHistory) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:6px;";
+
+      const label = document.createElement("span");
+      label.textContent = formatStage(entry.stage);
+      label.style.cssText = "flex:1;font-size:12px;color:#444;";
+      row.appendChild(label);
+
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.value = entry.enteredAt.slice(0, 10);
+      dateInput.style.cssText = "padding:2px 4px;";
+      historyDateInputs.push(dateInput);
+      row.appendChild(dateInput);
+
+      historyList.appendChild(row);
+    }
+    overlay.appendChild(historyList);
+  }
+
   const buttonRow = document.createElement("div");
   buttonRow.style.cssText = "display:flex;gap:8px;justify-content:flex-end;";
 
@@ -126,6 +160,11 @@ export function showApplicationEditor(options: {
   const saveButton = document.createElement("button");
   saveButton.textContent = "Save";
   saveButton.addEventListener("click", () => {
+    const stageHistory: StageHistoryEntry[] = options.initial.stageHistory.map((entry, i) => ({
+      stage: entry.stage,
+      enteredAt: new Date(`${historyDateInputs[i]!.value}T00:00:00.000Z`).toISOString(),
+    }));
+
     const result: ApplicationEditorResult = {
       ...readCompanyChoice(companyPicker),
       stage: readStage(stagePicker),
@@ -133,6 +172,7 @@ export function showApplicationEditor(options: {
       notes: notesInput.value,
       createdAt: new Date(`${createdAtInput.value}T00:00:00.000Z`).toISOString(),
       sessionId: sessionSelect.value === UNASSIGNED_VALUE ? null : sessionSelect.value,
+      stageHistory,
     };
     overlay.remove();
     options.onSave(result);

@@ -6,10 +6,23 @@ export interface CompanyGuess {
   domain?: string;
 }
 
+/** A stage detected from one specific message in the thread, identified by its position in the scraped message list. */
+export interface MessageStageSignal {
+  messageIndex: number;
+  stageSignal: StageSignal;
+}
+
 export interface ExtractionResult {
   companyGuess: CompanyGuess | null;
   summary: string;
-  stageSignal: StageSignal | null;
+  /**
+   * Per-message, not one aggregate guess for the whole thread — this is what
+   * lets a single "catch-up" track on a thread that already progressed
+   * through several stages backfill a dated entry for each one, rather than
+   * only ever seeing the final stage. Empty when no message signals a stage
+   * change.
+   */
+  stageSignalsByMessage: MessageStageSignal[];
   joiningLink: string | null;
 }
 
@@ -51,11 +64,9 @@ function parseCompanyGuess(value: unknown): CompanyGuess | null {
   return domain ? { name: guess.name, domain } : { name: guess.name };
 }
 
-function parseStageSignal(value: unknown): StageSignal | null {
-  if (value === null || value === undefined) return null;
-
-  if (typeof value !== "object") {
-    throw new ExtractionParseError("stageGuess must be an object or null");
+function parseStageSignal(value: unknown): StageSignal {
+  if (typeof value !== "object" || value === null) {
+    throw new ExtractionParseError("stageGuess must be an object");
   }
 
   const guess = value as Record<string, unknown>;
@@ -74,6 +85,31 @@ function parseStageSignal(value: unknown): StageSignal | null {
   return round === undefined
     ? { name: guess.name as StageSignal["name"] }
     : { name: guess.name as StageSignal["name"], round };
+}
+
+function parseStageSignalsByMessage(value: unknown): MessageStageSignal[] {
+  if (value === null || value === undefined) return [];
+
+  if (!Array.isArray(value)) {
+    throw new ExtractionParseError("stagesByMessage must be an array when present");
+  }
+
+  return value.map((entry, i) => {
+    if (typeof entry !== "object" || entry === null) {
+      throw new ExtractionParseError(`stagesByMessage[${i}] must be an object`);
+    }
+
+    const record = entry as Record<string, unknown>;
+    if (
+      typeof record.messageIndex !== "number" ||
+      !Number.isInteger(record.messageIndex) ||
+      record.messageIndex < 0
+    ) {
+      throw new ExtractionParseError(`stagesByMessage[${i}].messageIndex must be a non-negative integer`);
+    }
+
+    return { messageIndex: record.messageIndex, stageSignal: parseStageSignal(record.stageGuess) };
+  });
 }
 
 function parseJoiningLink(value: unknown): string | null {
@@ -100,7 +136,7 @@ export function parseExtractionResponse(raw: string): ExtractionResult {
   return {
     companyGuess: parseCompanyGuess(body.companyGuess),
     summary: body.summary,
-    stageSignal: parseStageSignal(body.stageGuess),
+    stageSignalsByMessage: parseStageSignalsByMessage(body.stagesByMessage),
     joiningLink: parseJoiningLink(body.joiningLink),
   };
 }

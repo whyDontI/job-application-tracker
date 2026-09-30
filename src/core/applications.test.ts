@@ -30,6 +30,8 @@ describe("createApplication", () => {
       stage: { name: "applied" },
       joiningLink: null,
       notes: "",
+      stageHistory: [{ stage: { name: "applied" }, enteredAt: "2026-09-28T00:00:00.000Z" }],
+      trackedMessageCount: 0,
       timelineEvents: [
         {
           id: "evt_1",
@@ -64,7 +66,53 @@ describe("createApplication", () => {
       stage: { name: "applied" },
       joiningLink: null,
       notes: "Applied via the company's careers page.",
+      stageHistory: [{ stage: { name: "applied" }, enteredAt: "2026-09-28T00:00:00.000Z" }],
+      trackedMessageCount: 0,
       timelineEvents: [],
     });
+  });
+
+  it("uses the given stageHistory instead of the single-entry default when provided", () => {
+    const stageHistory = [
+      { stage: { name: "applied" as const }, enteredAt: "2026-09-01T00:00:00.000Z" },
+      { stage: { name: "recruiter_screen" as const }, enteredAt: "2026-09-10T00:00:00.000Z" },
+    ];
+    const application = createApplication({
+      id: "app_3",
+      companyId: "co_1",
+      account: "nikhil@gmail.com",
+      sessionId: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      stage: { name: "recruiter_screen" },
+      joiningLink: null,
+      stageHistory,
+    });
+
+    expect(application.stageHistory).toEqual(stageHistory);
+  });
+
+  it("defaults trackedMessageCount to 0, or uses the given value", () => {
+    const withoutCount = createApplication({
+      id: "app_4",
+      companyId: "co_1",
+      account: "manual",
+      sessionId: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      stage: { name: "applied" },
+      joiningLink: null,
+    });
+    expect(withoutCount.trackedMessageCount).toBe(0);
+
+    const withCount = createApplication({
+      id: "app_5",
+      companyId: "co_1",
+      account: "nikhil@gmail.com",
+      sessionId: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      stage: { name: "applied" },
+      joiningLink: null,
+      trackedMessageCount: 3,
+    });
+    expect(withCount.trackedMessageCount).toBe(3);
   });
 });

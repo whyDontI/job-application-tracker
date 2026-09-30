@@ -1,8 +1,14 @@
-import { appendTimelineEvent, findApplicationByThreadId } from "../../core/applicationMatching.js";
+import {
+  appendTimelineEvent,
+  applyStageTransitions,
+  findApplicationByThreadId,
+  foldStageTransitions,
+  resolveDatedStageSignals,
+} from "../../core/applicationMatching.js";
 import { confirmTracking } from "../../core/confirmTracking.js";
 import { resolveCompany } from "../../core/companyResolution.js";
 import { getActiveSession } from "../../core/session.js";
-import { INITIAL_STAGE, applyStageSignal } from "../../core/stage.js";
+import { INITIAL_STAGE } from "../../core/stage.js";
 import type { TimelineEvent } from "../../core/types.js";
 import { createChromeRepository } from "../storage/chromeRepository.js";
 import type { ExtractThreadResponse, ExtractThreadRequest } from "../messages.js";
@@ -13,6 +19,7 @@ import {
   MENU_ID,
   buildThreadDeepLink,
   extractThreadIdFromUrl,
+  formatThreadTextForExtraction,
   getCurrentGmailAccount,
   getGmailAccountIndex,
   isThreadOpen,
@@ -75,7 +82,8 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
       return;
     }
 
-    const request: ExtractThreadRequest = { type: "EXTRACT_THREAD", threadText: scraped.threadText };
+    const threadText = formatThreadTextForExtraction(scraped.subject, scraped.messages);
+    const request: ExtractThreadRequest = { type: "EXTRACT_THREAD", threadText };
     const response = (await chrome.runtime.sendMessage(request)) as ExtractThreadResponse | undefined;
 
     if (!response) {
@@ -93,20 +101,29 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
     const applications = await repository.getApplications();
     const existingApplication = findApplicationByThreadId(applications, threadId);
 
+    const messageTimestamps = scraped.messages.map((message) => message.timestamp);
+
     if (existingApplication) {
+      const newMessageSignals = resolveDatedStageSignals(
+        response.result.stageSignalsByMessage,
+        messageTimestamps,
+        existingApplication.trackedMessageCount ?? 0
+      );
       const newEvent = buildTimelineEvent(threadId, accountIndex, "inbound", response.result.summary);
-      const updated = appendTimelineEvent(existingApplication, newEvent, {
-        stageSignal: response.result.stageSignal,
+      let updated = appendTimelineEvent(existingApplication, newEvent, {
         joiningLink: response.result.joiningLink,
       });
+      updated = applyStageTransitions(updated, newMessageSignals);
+      updated = { ...updated, trackedMessageCount: scraped.messages.length };
       await repository.saveApplication(updated);
       showToast("Job Tracker: added to the existing application's timeline.");
       return;
     }
 
+    const messageSignals = resolveDatedStageSignals(response.result.stageSignalsByMessage, messageTimestamps, 0);
     const companies = await repository.getCompanies();
     const { matchedCompanyId, suggestedName } = resolveCompany(companies, response.result.companyGuess);
-    const suggestedStage = applyStageSignal(INITIAL_STAGE, response.result.stageSignal);
+    const suggestedStage = foldStageTransitions(INITIAL_STAGE, messageSignals).at(-1)?.stage ?? INITIAL_STAGE;
     const activeSessionId = getActiveSession(await repository.getSessions())?.id ?? null;
 
     showConfirmPanel({
@@ -129,6 +146,8 @@ async function handleTrackClick(button: HTMLButtonElement): Promise<void> {
           event: buildTimelineEvent(threadId, accountIndex, "inbound", response.result.summary),
           stage: choice.stage,
           joiningLink: choice.joiningLink,
+          messageSignals,
+          trackedMessageCount: scraped.messages.length,
         });
 
         try {

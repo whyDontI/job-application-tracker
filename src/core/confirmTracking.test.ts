@@ -82,4 +82,65 @@ describe("confirmTracking", () => {
     expect(result.newCompany?.name).toBe("Unknown company");
     expect(result.newCompany?.domains).toEqual([]);
   });
+
+  it("backfills the full dated stage history when the confirmed stage matches where the message signals fold to", () => {
+    const result = confirmTracking({
+      applicationId: "app_1",
+      account: "nikhil@gmail.com",
+      sessionId: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      companyChoice: { companyId: "co_1", newCompanyName: null },
+      newCompanyId: "co_new",
+      event,
+      stage: { name: "interview", round: 1 },
+      joiningLink: null,
+      messageSignals: [
+        { stageSignal: { name: "recruiter_screen" }, enteredAt: "2026-09-05T00:00:00.000Z" },
+        { stageSignal: { name: "interview" }, enteredAt: "2026-09-12T00:00:00.000Z" },
+      ],
+    });
+
+    expect(result.application.stageHistory).toEqual([
+      { stage: { name: "applied" }, enteredAt: "2026-09-01T00:00:00.000Z" },
+      { stage: { name: "recruiter_screen" }, enteredAt: "2026-09-05T00:00:00.000Z" },
+      { stage: { name: "interview", round: 1 }, enteredAt: "2026-09-12T00:00:00.000Z" },
+    ]);
+  });
+
+  it("falls back to a single history entry for the confirmed stage when the user overrode it away from what the signals fold to", () => {
+    const result = confirmTracking({
+      applicationId: "app_1",
+      account: "nikhil@gmail.com",
+      sessionId: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      companyChoice: { companyId: "co_1", newCompanyName: null },
+      newCompanyId: "co_new",
+      event,
+      stage: { name: "offer" },
+      joiningLink: null,
+      messageSignals: [{ stageSignal: { name: "recruiter_screen" }, enteredAt: "2026-09-05T00:00:00.000Z" }],
+    });
+
+    expect(result.application.stageHistory).toEqual([
+      { stage: { name: "offer" }, enteredAt: "2026-09-01T00:00:00.000Z" },
+    ]);
+  });
+
+  it("defaults to a single Applied history entry when no message signals are given and the confirmed stage is Applied", () => {
+    const result = confirmTracking({
+      applicationId: "app_1",
+      account: "nikhil@gmail.com",
+      sessionId: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      companyChoice: { companyId: "co_1", newCompanyName: null },
+      newCompanyId: "co_new",
+      event,
+      stage: { name: "applied" },
+      joiningLink: null,
+    });
+
+    expect(result.application.stageHistory).toEqual([
+      { stage: { name: "applied" }, enteredAt: "2026-09-01T00:00:00.000Z" },
+    ]);
+  });
 });

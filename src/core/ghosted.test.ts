@@ -25,6 +25,8 @@ function makeApplication(overrides: Partial<Application>): Application {
     stage: { name: "applied" },
     joiningLink: null,
     notes: "",
+    stageHistory: [],
+    trackedMessageCount: 0,
     ...overrides,
   };
 }

@@ -1,5 +1,5 @@
 import type { Stage } from "./stage.js";
-import type { Application, TimelineEvent } from "./types.js";
+import type { Application, StageHistoryEntry, TimelineEvent } from "./types.js";
 
 export interface CreateApplicationInput {
   id: string;
@@ -12,6 +12,10 @@ export interface CreateApplicationInput {
   stage: Stage;
   joiningLink: string | null;
   notes?: string;
+  /** Defaults to a single entry for `stage`, dated `createdAt` — every application starts somewhere. */
+  stageHistory?: StageHistoryEntry[];
+  /** How many scraped thread messages were already folded into `stageHistory` above; defaults to 0 (a manually-added application has no thread at all). */
+  trackedMessageCount?: number;
 }
 
 export function createApplication(input: CreateApplicationInput): Application {
@@ -25,5 +29,7 @@ export function createApplication(input: CreateApplicationInput): Application {
     stage: input.stage,
     joiningLink: input.joiningLink,
     notes: input.notes ?? "",
+    stageHistory: input.stageHistory ?? [{ stage: input.stage, enteredAt: input.createdAt }],
+    trackedMessageCount: input.trackedMessageCount ?? 0,
   };
 }

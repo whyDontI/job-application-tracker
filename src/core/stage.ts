@@ -52,6 +52,13 @@ export function isTerminal(name: StageName): name is "rejected" | "withdrawn" | 
   return name === "rejected" || name === "withdrawn" || name === "ghosted";
 }
 
+/** Same stage and, for interview, same round — used to detect a genuine transition versus a repeated/no-op signal. */
+export function stagesEqual(a: Stage, b: Stage): boolean {
+  if (a.name !== b.name) return false;
+  if (a.name === "interview" && b.name === "interview") return a.round === b.round;
+  return true;
+}
+
 /**
  * Enforces the pipeline as an actual state machine, not just a free-form
  * label with a round counter:

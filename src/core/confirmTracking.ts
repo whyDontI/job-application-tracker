@@ -1,6 +1,9 @@
 import { createApplication } from "./applications.js";
+import { foldStageTransitions } from "./applicationMatching.js";
+import type { DatedStageSignal } from "./applicationMatching.js";
+import { INITIAL_STAGE, stagesEqual } from "./stage.js";
 import type { Stage } from "./stage.js";
-import type { Application, Company, TimelineEvent } from "./types.js";
+import type { Application, Company, StageHistoryEntry, TimelineEvent } from "./types.js";
 
 export interface CompanyChoice {
   companyId: string | null;
@@ -20,6 +23,17 @@ export interface ConfirmTrackingInput {
   /** Already confirmed/overridden by the user in the confirm panel — not a raw AI signal. */
   stage: Stage;
   joiningLink: string | null;
+  notes?: string;
+  /** Total messages in the scraped thread at track time — stored so a later re-track only folds genuinely new messages. */
+  trackedMessageCount?: number;
+  /**
+   * Per-message stage detections from the tracked thread. When folding them
+   * from Applied lands on the same stage the user confirmed, the full dated
+   * history is trusted; if the user overrode the stage instead, there's no
+   * way to know which message that corresponds to, so history falls back to
+   * a single entry for the confirmed stage.
+   */
+  messageSignals?: DatedStageSignal[];
 }
 
 export interface ConfirmTrackingResult {
@@ -55,7 +69,21 @@ export function confirmTracking(input: ConfirmTrackingInput): ConfirmTrackingRes
     firstEvent: input.event,
     stage: input.stage,
     joiningLink: input.joiningLink,
+    notes: input.notes,
+    stageHistory: buildInitialStageHistory(input),
+    trackedMessageCount: input.trackedMessageCount,
   });
 
   return { application, newCompany };
+}
+
+function buildInitialStageHistory(input: ConfirmTrackingInput): StageHistoryEntry[] {
+  const foldedTransitions = foldStageTransitions(INITIAL_STAGE, input.messageSignals ?? []);
+  const foldedFinalStage = foldedTransitions.at(-1)?.stage ?? INITIAL_STAGE;
+
+  if (!stagesEqual(foldedFinalStage, input.stage)) {
+    return [{ stage: input.stage, enteredAt: input.createdAt }];
+  }
+
+  return [{ stage: INITIAL_STAGE, enteredAt: input.createdAt }, ...foldedTransitions];
 }

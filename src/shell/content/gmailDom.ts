@@ -24,21 +24,57 @@ export function isThreadOpen(): boolean {
   return extractThreadIdFromUrl() !== null && document.querySelector(SUBJECT_SELECTOR) !== null;
 }
 
-export function scrapeOpenThread(): { subject: string; threadText: string } | null {
+export interface ScrapedMessage {
+  body: string;
+  /** The message's real send/receive time, scraped from Gmail's own timestamp — never tracking-click time. */
+  timestamp: string;
+}
+
+// The exact full timestamp for a message lives in a `title` attribute
+// (Gmail shows only a relative/short date in the visible text) on a `.g3`
+// span within that message's row — this is a well-known but unnamed Gmail
+// convention, and as fragile as every other selector in this file.
+const MESSAGE_TIMESTAMP_SELECTOR = ".g3[title]";
+const MESSAGE_ROW_SELECTOR = ".gs, .adn";
+
+function extractMessageTimestamp(bodyEl: Element): string | null {
+  const row = bodyEl.closest(MESSAGE_ROW_SELECTOR);
+  const title = row?.querySelector(MESSAGE_TIMESTAMP_SELECTOR)?.getAttribute("title");
+  if (!title) return null;
+
+  const parsed = new Date(title);
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+export function scrapeOpenThread(): { subject: string; messages: ScrapedMessage[] } | null {
   const subjectEl = document.querySelector(SUBJECT_SELECTOR);
   const bodyEls = document.querySelectorAll(MESSAGE_BODY_SELECTOR);
 
   if (!subjectEl || bodyEls.length === 0) return null;
 
   const subject = subjectEl.textContent?.trim() ?? "";
-  const bodies = [...bodyEls]
-    .map((el) => el.textContent?.trim() ?? "")
-    .filter((text) => text.length > 0);
+  const messages: ScrapedMessage[] = [];
 
-  return {
-    subject,
-    threadText: [`Subject: ${subject}`, ...bodies].join("\n\n---\n\n"),
-  };
+  for (const bodyEl of bodyEls) {
+    const body = bodyEl.textContent?.trim() ?? "";
+    if (!body) continue;
+    messages.push({ body, timestamp: extractMessageTimestamp(bodyEl) ?? new Date().toISOString() });
+  }
+
+  return { subject, messages };
+}
+
+/**
+ * The single string sent to the AI for extraction — messages are numbered
+ * and dated so the model can reference "message 2" in its per-message stage
+ * signals, and so a manually-overridden or unparsed timestamp is visible in
+ * the text itself rather than silently lost.
+ */
+export function formatThreadTextForExtraction(subject: string, messages: ScrapedMessage[]): string {
+  const messageBlocks = messages.map(
+    (message, index) => `--- Message ${index} (${message.timestamp}) ---\n${message.body}`
+  );
+  return [`Subject: ${subject}`, ...messageBlocks].join("\n\n");
 }
 
 export function getGmailAccountIndex(): string {

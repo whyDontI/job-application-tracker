@@ -9,6 +9,12 @@ export interface TimelineEvent {
   deepLink: string;
 }
 
+/** One point the application reached in the pipeline, dated by the source email's real timestamp (not tracking-click time). */
+export interface StageHistoryEntry {
+  stage: Stage;
+  enteredAt: string;
+}
+
 export interface Application {
   id: string;
   companyId: string;
@@ -19,6 +25,14 @@ export interface Application {
   stage: Stage;
   joiningLink: string | null;
   notes: string;
+  stageHistory: StageHistoryEntry[];
+  /**
+   * How many of the scraped thread's messages have already been folded into
+   * stageHistory — lets a re-track only process genuinely new messages
+   * instead of re-folding old ones against the stage they already advanced
+   * past (which would corrupt round numbers/dates on every re-track).
+   */
+  trackedMessageCount: number;
 }
 
 export interface Company {
