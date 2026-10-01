@@ -1,9 +1,13 @@
+import { createBackupFromRepository, parseBackup, restoreBackup, serializeBackup } from "../../core/backup.js";
 import { DEFAULT_LLM_CONFIG, LLM_CONFIG_STORAGE_KEY, LLM_PROVIDERS, LLM_PROVIDER_LABELS, type LlmConfig } from "../llmConfig.js";
 import {
   DEFAULT_GHOSTED_THRESHOLD_DAYS,
   GHOSTED_THRESHOLD_STORAGE_KEY,
   isValidGhostedThreshold,
 } from "../ghostedConfig.js";
+import { createChromeRepository } from "../storage/chromeRepository.js";
+
+const repository = createChromeRepository();
 
 const providerSelect = document.getElementById("provider") as HTMLSelectElement;
 const apiKeyInput = document.getElementById("apiKey") as HTMLInputElement;
@@ -13,6 +17,9 @@ const openDashboardButton = document.getElementById("openDashboard") as HTMLButt
 const ghostedThresholdInput = document.getElementById("ghostedThreshold") as HTMLInputElement;
 const saveGhostedThresholdButton = document.getElementById("saveGhostedThreshold") as HTMLButtonElement;
 const ghostedThresholdStatusEl = document.getElementById("ghostedThresholdStatus") as HTMLDivElement;
+const exportBackupButton = document.getElementById("exportBackup") as HTMLButtonElement;
+const importBackupInput = document.getElementById("importBackup") as HTMLInputElement;
+const backupStatusEl = document.getElementById("backupStatus") as HTMLDivElement;
 
 for (const provider of LLM_PROVIDERS) {
   const option = document.createElement("option");
@@ -73,6 +80,47 @@ saveGhostedThresholdButton.addEventListener("click", async () => {
   }
   await saveGhostedThreshold(days);
   ghostedThresholdStatusEl.textContent = "Saved.";
+});
+
+exportBackupButton.addEventListener("click", async () => {
+  const backup = await createBackupFromRepository(repository, new Date().toISOString());
+  const blob = new Blob([serializeBackup(backup)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `job-tracker-backup-${backup.exportedAt.slice(0, 10)}.json`;
+  link.click();
+
+  URL.revokeObjectURL(url);
+  backupStatusEl.textContent = `Exported ${backup.applications.length} applications, ${backup.companies.length} companies, ${backup.sessions.length} sessions.`;
+});
+
+importBackupInput.addEventListener("change", async () => {
+  const file = importBackupInput.files?.[0];
+  importBackupInput.value = "";
+  if (!file) return;
+
+  let backup;
+  try {
+    backup = parseBackup(await file.text());
+  } catch (error) {
+    backupStatusEl.textContent = `Import failed: ${error instanceof Error ? error.message : String(error)}`;
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `This will replace ALL current data with the backup from ${new Date(backup.exportedAt).toLocaleString()} ` +
+      `(${backup.applications.length} applications, ${backup.companies.length} companies, ${backup.sessions.length} sessions). This can't be undone. Continue?`
+  );
+  if (!confirmed) return;
+
+  try {
+    await restoreBackup(repository, backup);
+    backupStatusEl.textContent = "Import complete.";
+  } catch (error) {
+    backupStatusEl.textContent = `Import failed partway through: ${error instanceof Error ? error.message : String(error)}`;
+  }
 });
 
 openDashboardButton.addEventListener("click", () => {
